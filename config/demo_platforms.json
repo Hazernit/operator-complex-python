@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "platforms": [
+    {
+      "id": "demo-uav-01",
+      "name": "БПЛА — заглушка",
+      "kind": "БПЛА",
+      "description": "Воздушная платформа: демонстрация высоты и общего интерфейса. Полётная автоматика пока не подключена.",
+      "capabilities": ["manual", "mission"],
+      "initial_pose": {"x": 22, "y": 48, "heading": 0},
+      "telemetry_fields": [
+        {"key": "demo_charge", "label": "Демо-заряд", "semantic": "battery_percent", "unit": "%", "value": 85, "demo": {"kind": "wave", "amplitude": 3, "period_s": 45}},
+        {"key": "demo_link", "label": "Демо-качество связи", "semantic": "link_quality_percent", "unit": "%", "value": 92, "demo": {"kind": "wave", "amplitude": 4, "period_s": 16}},
+        {"key": "demo_altitude", "label": "Демо: высота", "unit": "усл. ед.", "value": 12, "demo": {"kind": "wave", "amplitude": 2, "period_s": 12}},
+        {"key": "demo_flight_state", "label": "Демо: состояние полёта", "value": "Тестовый статус"},
+        {"key": "profile", "label": "Профиль", "unit": "", "value": "демонстрационный"}
+      ]
+    },
+    {
+      "id": "demo-ugv-01",
+      "name": "НРТК — заглушка",
+      "kind": "НРТК",
+      "description": "Наземная платформа: демонстрация движения по плоскости. Привод и датчики пока не определены.",
+      "capabilities": ["manual", "mission"],
+      "initial_pose": {"x": 50, "y": 28, "heading": 90},
+      "telemetry_fields": [
+        {"key": "demo_charge", "label": "Демо-заряд", "semantic": "battery_percent", "unit": "%", "value": 72, "demo": {"kind": "wave", "amplitude": 2, "period_s": 50}},
+        {"key": "demo_link", "label": "Демо-качество связи", "semantic": "link_quality_percent", "unit": "%", "value": 68, "demo": {"kind": "wave", "amplitude": 5, "period_s": 18}},
+        {"key": "demo_obstacle_distance", "label": "Демо: расстояние до препятствия", "unit": "усл. ед.", "value": 8, "demo": {"kind": "wave", "amplitude": 1.5, "period_s": 10}},
+        {"key": "demo_chassis_state", "label": "Демо: ходовая", "value": "Тестовый статус"},
+        {"key": "profile", "label": "Профиль", "unit": "", "value": "демонстрационный"}
+      ]
+    },
+    {
+      "id": "demo-usv-01",
+      "name": "БЭК — заглушка",
+      "kind": "БЭК",
+      "description": "Надводная платформа: демонстрация курса и водной среды. Воздействие течения и ветра пока не моделируется.",
+      "capabilities": ["manual", "mission"],
+      "initial_pose": {"x": 78, "y": 45, "heading": 180},
+      "telemetry_fields": [
+        {"key": "demo_charge", "label": "Демо-заряд", "semantic": "battery_percent", "unit": "%", "value": 91, "demo": {"kind": "wave", "amplitude": 2, "period_s": 40}},
+        {"key": "demo_link", "label": "Демо-качество связи", "semantic": "link_quality_percent", "unit": "%", "value": 80, "demo": {"kind": "wave", "amplitude": 6, "period_s": 15}},
+        {"key": "demo_depth", "label": "Демо: глубина", "unit": "усл. ед.", "value": 15, "demo": {"kind": "wave", "amplitude": 3, "period_s": 16}},
+        {"key": "demo_hull_state", "label": "Демо: состояние корпуса", "value": "Тестовый статус"},
+        {"key": "profile", "label": "Профиль", "unit": "", "value": "демонстрационный"}
+      ]
+    }
+  ]
+}

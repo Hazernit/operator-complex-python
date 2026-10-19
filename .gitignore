@@ -1,0 +1,36 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+.DS_Store
+analysis/
+tmp/
+output/
+
+# Local secrets and developer-specific settings
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+.idea/
+.vscode/
+
+# Runtime data and caches
+*.log
+*.sqlite
+*.sqlite3
+*.db
+.tox/
+.nox/
