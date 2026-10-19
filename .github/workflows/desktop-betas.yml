@@ -1,0 +1,249 @@
+name: Desktop beta packages
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/desktop-betas.yml'
+      - 'scripts/package_desktop.py'
+      - 'scripts/desktop_release_entry.py'
+      - 'docs/RELEASES.md'
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: 'Edition to build and publish'
+        required: true
+        type: choice
+        options:
+          - technical
+          - new-interface
+      tag:
+        description: 'New prerelease tag, e.g. v0.4.0-beta.2; never reuse tags'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-beta-${{ github.event_name }}-${{ github.event.inputs.edition || github.head_ref || github.ref }}-${{ github.event.inputs.tag || 'pr' }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate release and choose platforms
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.config.outputs.matrix }}
+      source_sha: ${{ steps.config.outputs.source_sha }}
+      tag: ${{ steps.config.outputs.tag }}
+      edition: ${{ steps.config.outputs.edition }}
+    steps:
+      - name: Resolve immutable build source and release version
+        id: config
+        shell: bash
+        env:
+          RUN_KIND: ${{ github.event_name }}
+          INPUT_EDITION: ${{ inputs.edition }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+
+          mode = os.environ['RUN_KIND']
+          edition = os.getenv('INPUT_EDITION', '')
+          tag = os.getenv('INPUT_TAG', '')
+          channels = {'technical': 'develop/technical', 'new-interface': 'main'}
+          if mode == 'workflow_dispatch':
+              if edition not in channels:
+                  raise SystemExit('Unknown edition')
+              pattern = r'^v0\.3\.\d+-beta\.\d+$' if edition == 'technical' else r'^v0\.4\.\d+-beta\.\d+$'
+              if not re.fullmatch(pattern, tag):
+                  raise SystemExit('Tag must match edition (technical: v0.3.x-beta.n, new-interface: v0.4.x-beta.n)')
+              if tag in ('v0.3.0-beta.1', 'v0.4.0-beta.1'):
+                  raise SystemExit('Initial beta.1 assets are published separately; do not recreate them')
+              sha_line = subprocess.check_output(
+                  ['git', 'ls-remote', f'https://github.com/{os.environ["GITHUB_REPOSITORY"]}.git',
+                   f'refs/heads/{channels[edition]}'], text=True).strip()
+              if not sha_line:
+                  raise SystemExit('Release source branch missing')
+              sha = sha_line.split()[0]
+              targets = [edition]
+          else:
+              sha = ''
+              targets = list(channels)
+          matrix = {'include': [
+              {'edition': target, 'os': system, 'ref': channels[target]}
+              for target in targets for system in ('windows-2022', 'macos-15')
+          ]}
+          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as file:
+              file.write(f'matrix={json.dumps(matrix, separators=(",", ":"))}\n')
+              file.write(f'source_sha={sha}\n')
+              file.write(f'tag={tag}\n')
+              file.write(f'edition={edition}\n')
+          print('Release matrix:', matrix)
+          if mode == 'workflow_dispatch':
+              print('Release source SHA:', sha)
+          PY
+
+  build:
+    name: Package ${{ matrix.edition }} on ${{ matrix.os }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUNBUFFERED: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - name: Checkout release toolchain (this workflow revision)
+        uses: actions/checkout@v5
+        with:
+          path: tooling
+      - name: Checkout track sources (pinned SHA on publish)
+        uses: actions/checkout@v5
+        with:
+          path: application
+          ref: ${{ github.event_name == 'workflow_dispatch' && needs.prepare.outputs.source_sha || matrix.ref }}
+      - name: Require correct native CPU architecture
+        shell: bash
+        run: |
+          python -c 'import platform,sys; m=platform.machine().lower(); print(platform.platform(),m); assert (sys.platform=="win32" and m in ("amd64", "x86_64")) or (sys.platform=="darwin" and m=="arm64")'
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install pinned packaging dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'PyInstaller==6.16.0' 'PySide6-Essentials==6.12.0'
+          python -m pip install --no-deps -e ./application
+      - name: Package portable native application
+        shell: bash
+        env:
+          EDITION: ${{ matrix.edition }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && needs.prepare.outputs.tag || 'v0.4.0-beta.2' }}
+        run: |
+          sha="$(git -C application rev-parse HEAD)"
+          if [[ "${EDITION}" == 'technical' && "${{ github.event_name }}" != 'workflow_dispatch' ]]; then RELEASE_TAG='v0.3.0-beta.2'; fi
+          python tooling/scripts/package_desktop.py --source application --out packages --edition "$EDITION" --tag "$RELEASE_TAG" --source-sha "$sha"
+      - name: Smoke-test the actual Windows executable and BAT
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          EDITION: ${{ matrix.edition }}
+        run: |
+          $app = if ($env:EDITION -eq 'technical') { 'OperatorComplex' } else { 'OperatorComplexNewInterface' }
+          $folder = "packages/_staging/dist/$app"
+          $exe = (Resolve-Path "$folder/$app.exe").Path
+          $verify = Start-Process -FilePath $exe -ArgumentList '--verify-bundle' -Wait -PassThru -NoNewWindow
+          if ($verify.ExitCode -ne 0) { throw "Packaged EXE resource check failed: $($verify.ExitCode)" }
+          $smoke = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -Wait -PassThru -NoNewWindow
+          if ($smoke.ExitCode -ne 0) { throw "Packaged EXE GUI smoke failed: $($smoke.ExitCode)" }
+          & "$folder/Start-$app.bat" --verify-bundle
+          if ($LASTEXITCODE -ne 0) { throw "BAT launcher check failed: $LASTEXITCODE" }
+      - name: Smoke-test the actual macOS app
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          EDITION: ${{ matrix.edition }}
+        run: |
+          if [[ "$EDITION" == 'technical' ]]; then app='OperatorComplex'; else app='OperatorComplexNewInterface'; fi
+          executable="packages/_staging/dist/$app.app/Contents/MacOS/$app"
+          "$executable" --verify-bundle
+          "$executable" --smoke-test
+          codesign --verify --deep "packages/_staging/dist/$app.app"
+      - name: Validate portable ZIP and internal structure
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          archives = list(Path('packages').glob('OperatorComplex-*.zip'))
+          assert len(archives) == 1, archives
+          with zipfile.ZipFile(archives[0]) as archive:
+              assert archive.testzip() is None
+              assert len(archive.namelist()) > 10
+          print('One verified portable ZIP:', archives[0], archives[0].stat().st_size)
+          PY
+      - name: Upload verified beta archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.edition }}-${{ matrix.os }}
+          path: packages/OperatorComplex-*.zip
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  publish:
+    name: Publish immutable GitHub prerelease
+    if: github.event_name == 'workflow_dispatch'
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      EDITION: ${{ needs.prepare.outputs.edition }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+    steps:
+      - name: Download both platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-${{ needs.prepare.outputs.edition }}-*
+          path: release-files
+          merge-multiple: true
+      - name: Verify two distinct assets and write checksums
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          directory = Path('release-files')
+          archives = sorted(directory.glob('OperatorComplex-*.zip'))
+          tag = os.environ['TAG']; edition = os.environ['EDITION']
+          expected = {f'OperatorComplex-{tag}-{edition}-Windows-x64.zip',
+                      f'OperatorComplex-{tag}-{edition}-macOS-arm64.zip'}
+          actual = {archive.name for archive in archives}
+          if actual != expected:
+              raise SystemExit(f'Expected exactly {expected}, got {actual}')
+          lines = []
+          for archive in archives:
+              digest = hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest()
+              lines.append(f'{digest}  {archive.name}')
+          (directory / 'SHA256SUMS.txt').write_text('\n'.join(lines)+'\n')
+          print('Ready for publish:', '\n'.join(lines))
+          PY
+      - name: Refuse any overwrite and publish prerelease from source SHA
+        shell: bash
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "A release already exists: $TAG" >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "An existing Git tag prevents publishing: $TAG" >&2
+            exit 1
+          fi
+          cat > RELEASE_NOTES.md <<EOF
+          # Operator Complex $TAG ($EDITION)
+
+          **Experimental beta release.** The project currently operates on local simulated data.
+          Source commit: \`$SOURCE_SHA\` (edition: \`$EDITION\`).
+
+          Assets contain autonomous Windows x64 and Apple Silicon macOS applications.
+          Download the OS-specific ZIP from Assets, extract it completely, and launch the
+          included .exe/.bat (Windows) or .app (macOS).
+
+          CI smoke-tested both packaged applications. The macOS build is ad-hoc signed,
+          **not Developer ID notarized**, and Windows has no Authenticode signature.
+          OS warnings may apply. No in-app auto-updater is included yet.
+          EOF
+          gh release create "$TAG" release-files/*.zip release-files/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --prerelease --latest=false \
+            --title "Operator Complex $TAG — $EDITION" --notes-file RELEASE_NOTES.md
