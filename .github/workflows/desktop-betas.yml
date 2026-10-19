@@ -144,7 +144,7 @@ jobs:
           if ($verify.ExitCode -ne 0) { throw "Packaged EXE resource check failed: $($verify.ExitCode)" }
           $smoke = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -Wait -PassThru -NoNewWindow
           if ($smoke.ExitCode -ne 0) { throw "Packaged EXE GUI smoke failed: $($smoke.ExitCode)" }
-          cmd /d /c "call \"$folder/Start-$app.bat\" --verify-bundle"
+          & "$folder/Start-$app.bat" --verify-bundle
           if ($LASTEXITCODE -ne 0) { throw "BAT launcher check failed: $LASTEXITCODE" }
       - name: Smoke-test the actual macOS app
         if: runner.os == 'macOS'
