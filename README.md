@@ -250,6 +250,19 @@ Mock-платформы / Gazebo / ROS 2 / реальные аппараты
 
 Этапы: **контракты → независимая разработка → три источника на карте → обратный канал команд → сквозные миссии → реальные платформы**. Выполнение любого этапа нужно подтверждать тестами и демонстрацией, а не только наличием файла.
 
+## Команда проекта
+
+Проект развивается совместно четырьмя участниками. Их GitHub-профили и зоны ответственности указаны здесь, чтобы команда была видна на главной странице репозитория **независимо от числа коммитов**.
+
+| Участник | Направление | Основные задачи |
+| --- | --- | --- |
+| [**@Hazernit**](https://github.com/Hazernit) — Дмитрий Кривошеин | Backend, единый контракт и архитектура | [#1–3](https://github.com/Hazernit/operator-complex-python/issues/1), [`feature/backend`](https://github.com/Hazernit/operator-complex-python/tree/feature/backend) |
+| [**@nefrvpene**](https://github.com/nefrvpene) — Матвей Кузьмин | Адаптеры, эмуляторы, ROS 2 / Gazebo | [#4](https://github.com/Hazernit/operator-complex-python/issues/4), [#5](https://github.com/Hazernit/operator-complex-python/issues/5), [`feature/adapters`](https://github.com/Hazernit/operator-complex-python/tree/feature/adapters) |
+| [**@Daniil-Ver-S**](https://github.com/Daniil-Ver-S) — Даниил Верещагин | Dashboard, карта и визуализация телеметрии | [#6](https://github.com/Hazernit/operator-complex-python/issues/6), [#7](https://github.com/Hazernit/operator-complex-python/issues/7), [`feature/dashboard`](https://github.com/Hazernit/operator-complex-python/tree/feature/dashboard) |
+| [**@Arslange**](https://github.com/Arslange) — Арсений Алиев | Миссии, события и интеграционные сценарии | [#8](https://github.com/Hazernit/operator-complex-python/issues/8), [#9](https://github.com/Hazernit/operator-complex-python/issues/9), [`feature/missions`](https://github.com/Hazernit/operator-complex-python/tree/feature/missions) |
+
+Общий порядок работы: **Issue → отдельная ветка → Pull Request → тесты и ревью → слияние владельцем**. Подробнее — в [CONTRIBUTING.md](CONTRIBUTING.md). Блок `Contributors` GitHub заполняет по учтённым коммитам; он **не является списком участников с доступом**. Доступ выдаётся отдельно через GitHub Collaborators.
+
 ## Версии и история
 
 | Ссылка | Содержание | Назначение |
