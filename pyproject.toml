@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "operator-complex-stub"
-version = "0.4.0"
+version = "0.3.0"
 description = "Программная заглушка единого операторского комплекса БПЛА, НРТК и БЭК"
 readme = "README.md"
 requires-python = ">=3.11"

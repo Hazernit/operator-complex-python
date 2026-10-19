@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import replace
 import math
 from pathlib import Path
 import tempfile
@@ -106,16 +105,12 @@ class RecordingPlayerTests(unittest.TestCase):
         self.assertEqual((sample.pose.x, sample.pose.y), (2, 0))
         self.assertEqual(sample.pose.heading, 0)
         self.assertEqual(sample.reading_time_s, 10)
-        # Programmatically created recordings may omit acquisition metadata.
-        # Playback enriches a copied reading so asynchronous sensor scans retain
-        # their own origin; comparing the unannotated dataclass is no longer the
-        # contract. The measured values and original recording must be preserved.
         original = source.frames[0].readings[0]
-        self.assertEqual(sample.readings, (replace(
-            original, measurement_pose=source.frames[0].pose, measurement_time_s=10,
-        ),))
-        self.assertIsNone(original.measurement_pose)
-        self.assertIsNone(original.measurement_time_s)
+        measured = sample.readings[0]
+        self.assertEqual((measured.sensor, measured.angle_deg, measured.range_m),
+                         (original.sensor, original.angle_deg, original.range_m))
+        self.assertEqual(measured.measurement_pose, source.frames[0].pose)
+        self.assertEqual(measured.measurement_time_s, 10)
         self.assertEqual((sample.reading_pose.x, sample.reading_pose.y), (0, 0))
         ox, oy, x, y = project_reading(sample, sample.readings[0])
         self.assertEqual((ox, oy), (0, 0))

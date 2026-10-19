@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
 from .map_widget import MapWidget
 from .models import Point
 from .playback import RecordingPlayer
-from .recording_loader import RecordingLoader
 from .presentation import metric_value, profile_for, warnings_for
 from .sensor_data import load_recording
 from .service import OperatorService
@@ -32,8 +31,51 @@ STATUS = {
     'COMPLETED': 'Завершено', 'CANCELLED': 'Отменено',
 }
 
-from .design import STYLE
-from .workspace import WorkspaceMixin
+STYLE = '''
+QMainWindow { background: #edf2f7; }
+QWidget { font-family: "Arial"; font-size: 13px; color: #23364c; }
+QWidget#sidebar { background: #112238; }
+QWidget#commandPage { background: white; }
+QWidget#sidebar QLabel { color: #d8e5f3; }
+QLabel#brand { color: white; font-size: 21px; font-weight: bold; }
+QLabel#sidebarNote { color: #94abc4; font-size: 12px; }
+QLabel#heading { color: #1c3049; font-size: 25px; font-weight: bold; }
+QLabel#muted { color: #6d7e91; font-size: 12px; }
+QLabel#warning { background: #fff3d8; color: #7a5716; border: 1px solid #ebd59f;
+                border-radius: 7px; padding: 9px 12px; }
+QListWidget { background: #172d47; border: none; border-radius: 8px; outline: none; }
+QListWidget::item { color: #dbe6f3; padding: 10px; border-bottom: 1px solid #253c56; }
+QListWidget::item:selected { background: #245a65; color: white; border-left: 3px solid #55c9ad; }
+QFrame#card { background: white; border: 1px solid #dbe3ed; border-radius: 9px; }
+QFrame#metric { background: white; border: 1px solid #dbe3ed; border-radius: 8px; }
+QLabel#metricValue { font-size: 16px; font-weight: bold; color: #213c55; }
+QProgressBar { border: none; background: #e4ebf1; border-radius: 3px; max-height: 6px; }
+QProgressBar::chunk { background: #168d79; border-radius: 3px; }
+QComboBox { border: 1px solid #cfd9e5; border-radius: 5px; padding: 5px 9px; background: white; }
+QScrollArea { border: none; background: transparent; }
+QPushButton { background: #f4f7fa; border: 1px solid #cfd9e5; border-radius: 6px;
+              padding: 8px 12px; font-weight: bold; }
+QPushButton:hover { background: #e6edf5; }
+QPushButton:pressed { background: #cedce9; }
+QPushButton:disabled { color: #9cabb9; background: #f2f4f7; border-color: #e1e7ed; }
+QPushButton#primary { background: #168d79; color: white; border-color: #168d79; }
+QPushButton#primary:hover { background: #117766; }
+QPushButton#primary:disabled { background: #a9c9c3; border-color: #a9c9c3; }
+QPushButton#stop { background: #fff0ee; color: #ae3a32; border-color: #e4b4ad; font-size: 15px; }
+QPushButton#direction { font-size: 22px; padding: 4px; }
+QWidget#sidebar QPushButton { background: #203a55; color: #dce8f5; border-color: #36516e; }
+QWidget#sidebar QPushButton:hover { background: #2d4b68; }
+QTabWidget::pane { background: white; border: 1px solid #dbe3ed; border-radius: 7px; }
+QTabBar::tab { padding: 10px 20px; background: #e4ebf3; border: none; color: #5a6d82; }
+QTabBar::tab:selected { background: white; color: #173b52; font-weight: bold; }
+QTableWidget { background: white; border: none; gridline-color: #edf1f5; selection-background-color: #e4f1ed; }
+QHeaderView::section { background: #f4f7fb; color: #6c7d90; border: none; padding: 8px; font-weight: bold; }
+QTextEdit { background: #fbfcfe; border: none; font-family: "Menlo", "Consolas", monospace; font-size: 12px; }
+QSlider::groove:horizontal { height: 5px; background: #d9e3ec; border-radius: 2px; }
+QSlider::handle:horizontal { width: 14px; margin: -5px 0; background: #168d79; border-radius: 7px; }
+QCheckBox { spacing: 7px; }
+QStatusBar { background: #e5ecf4; color: #64788f; }
+'''
 
 
 def label(text, name=None, wrap=False):
@@ -54,7 +96,7 @@ def button(text, callback=None, name=None):
     return result
 
 
-class OperatorWindow(WorkspaceMixin, QMainWindow):
+class OperatorWindow(QMainWindow):
     def __init__(self, config_path=None):
         super().__init__()
         self.service = OperatorService(config_path)
@@ -65,15 +107,10 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         self._last_events = None
         self._active_alerts = {}
         self._replays = {}
-        self._pending_imports = {}
-        self._closing = False
-        self.recording_loader = RecordingLoader(self)
-        self.recording_loader.success.connect(self._recording_ready)
-        self.recording_loader.failure.connect(self._recording_failed)
         self._last_tick = time.monotonic()
-        self.setWindowTitle('Оператор · Единый комплекс · DEMO')
-        self.resize(1440, 900)
-        self.setMinimumSize(1100, 720)
+        self.setWindowTitle('Единый операторский комплекс · Симуляция и датчики')
+        self.resize(1480, 970)
+        self.setMinimumSize(1180, 900)
         self.setStyleSheet(STYLE)
         self._build()
         QApplication.instance().installEventFilter(self)
@@ -84,6 +121,255 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         self.timer.timeout.connect(self._tick)
         self.timer.start(50)
         self.statusBar().showMessage('Локальная симуляция и просмотр записей · физические роботы не подключены')
+
+    def _build(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        sidebar = QWidget(objectName='sidebar')
+        sidebar.setFixedWidth(260)
+        side = QVBoxLayout(sidebar)
+        side.setContentsMargins(18, 25, 18, 20)
+        side.setSpacing(14)
+        side.addWidget(label('Операторский\nкомплекс', 'brand'))
+        side.addWidget(label('PYTHON / ПРОТОТИП 0.3', 'sidebarNote'))
+        side.addSpacing(15)
+        side.addWidget(label('ТЕСТОВЫЕ ПЛАТФОРМЫ', 'sidebarNote'))
+        side.addWidget(label('Выберите устройство для показа на карте', 'sidebarNote', True))
+        self.platform_list = QListWidget()
+        self.platform_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.platform_list.setMinimumHeight(310)
+        self.platform_list.setMaximumHeight(400)
+        for platform_id, state in self.service.platforms.items():
+            item = QListWidgetItem()
+            item.setSizeHint(QSize(215, 100))
+            item.setData(Qt.ItemDataRole.UserRole, platform_id)
+            self.platform_list.addItem(item)
+            if platform_id == self.selected_id:
+                self.platform_list.setCurrentItem(item)
+        self.platform_list.currentItemChanged.connect(self._selection_changed)
+        side.addWidget(self.platform_list)
+        side.addWidget(button('Подключить все демо', self._connect_all))
+        side.addWidget(button('Экспорт сеанса', self._export_session))
+        side.addWidget(button('Сбросить выбранное демо', self._reset))
+        side.addStretch()
+        self.freshness = label('', 'sidebarNote', True)
+        side.addWidget(self.freshness)
+        side.addWidget(label('Конфигурация данных', 'sidebarNote'))
+        side.addWidget(label('Поля и значения условные.\nДатчики и протоколы будут\nуточнены после выбора роботов.', 'sidebarNote', True))
+        root.addWidget(sidebar)
+        main = QWidget()
+        outer = QVBoxLayout(main)
+        outer.setContentsMargins(22, 18, 22, 14)
+        outer.setSpacing(12)
+        header = QHBoxLayout()
+        title = QVBoxLayout()
+        title.addWidget(label('Рабочее место оператора', 'heading'))
+        title.addWidget(label('БПЛА · НРТК · БЭК  /  единый интерфейс тестовых источников', 'muted'))
+        header.addLayout(title)
+        header.addStretch()
+        header.addWidget(button('Датчики / TXT', lambda: self.tabs.setCurrentWidget(self.sensor_page)))
+        self.overall_status = label('')
+        header.addWidget(self.overall_status)
+        outer.addLayout(header)
+        self.source_banner = label('', 'warning', True)
+        outer.addWidget(self.source_banner)
+        metrics = QHBoxLayout()
+        self.metric_values = {}
+        self.metric_bars = {}
+        for key, caption in [('battery', 'ЗАРЯД БАТАРЕИ'), ('link', 'КАЧЕСТВО СВЯЗИ'), ('mode', 'РЕЖИМ РАБОТЫ'), ('position', 'ПОЛОЖЕНИЕ · X / Y, М'), ('mission', 'ЗАДАНИЕ'), ('speed', 'СКОРОСТЬ · М/С')]:
+            frame = QFrame(objectName='metric')
+            lay = QVBoxLayout(frame)
+            lay.setContentsMargins(11, 10, 11, 10)
+            lay.addWidget(label(caption, 'muted'))
+            self.metric_values[key] = label('—', 'metricValue', True)
+            lay.addWidget(self.metric_values[key])
+            if key in ('battery', 'link'):
+                bar = QProgressBar()
+                bar.setRange(0, 100)
+                bar.setTextVisible(False)
+                bar.setFixedHeight(6)
+                self.metric_bars[key] = bar
+                lay.addWidget(bar)
+            else:
+                lay.addSpacing(6)
+            metrics.addWidget(frame, 1)
+        outer.addLayout(metrics)
+        alert_row = QHBoxLayout()
+        self.alert_summary = label('', wrap=True)
+        self.alert_summary.setMinimumHeight(32)
+        alert_row.addWidget(self.alert_summary, 1)
+        alert_row.addWidget(button('Все предупреждения', lambda: self.tabs.setCurrentWidget(self.warning_table)))
+        outer.addLayout(alert_row)
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter = splitter
+        splitter.setChildrenCollapsible(False)
+        row = QWidget()
+        row.setMinimumHeight(440)
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(12)
+        map_card = QFrame(objectName='card')
+        map_layout = QVBoxLayout(map_card)
+        map_layout.setContentsMargins(12, 10, 12, 8)
+        toolbar = QHBoxLayout()
+        self.profile_label = label('Карта и маршрут')
+        toolbar.addWidget(self.profile_label)
+        toolbar.addStretch()
+        self.edit_checkbox = QCheckBox('Добавлять точки')
+        self.edit_checkbox.setChecked(True)
+        self.edit_checkbox.toggled.connect(self._edit_toggled)
+        toolbar.addWidget(self.edit_checkbox)
+        toolbar.addWidget(button('Вписать', lambda: self.map.fit_map()))
+        map_layout.addLayout(toolbar)
+        self.map = MapWidget()
+        self.map.waypoint_requested.connect(self._add_waypoint)
+        self.map.platform_selected.connect(self._select_platform)
+        map_layout.addWidget(self.map, 1)
+        self.platform_limitation = label('', 'muted', True)
+        map_layout.addWidget(self.platform_limitation)
+        map_layout.addWidget(label('Колесо — масштаб · Правая кнопка — сдвиг · План — пунктир, измеренный трек — синий', 'muted', True))
+        row_layout.addWidget(map_card, 1)
+        controls = QFrame(objectName='card')
+        controls.setFixedWidth(300)
+        control_shell = QVBoxLayout(controls)
+        control_shell.setContentsMargins(10, 12, 10, 8)
+        control_shell.setSpacing(7)
+        self.platform_title = label('')
+        self.platform_title.setFont(QFont('Arial', 15, QFont.Weight.Bold))
+        control_shell.addWidget(self.platform_title)
+        self.metric_values['connection'] = label('', 'muted', True)
+        control_shell.addWidget(self.metric_values['connection'])
+        self.connection_button = button('Отключить демо', self._toggle_connection)
+        control_shell.addWidget(self.connection_button)
+        self.control_tabs = QTabWidget()
+        manual_page = QWidget(objectName='commandPage')
+        ctl = QVBoxLayout(manual_page)
+        ctl.setContentsMargins(9, 10, 9, 7)
+        ctl.setSpacing(6)
+        ctl.addWidget(label('РУЧНОЕ ДЕМО-УПРАВЛЕНИЕ', 'muted'))
+        self.manual_hint = label('', 'muted', True)
+        ctl.addWidget(self.manual_hint)
+        pad = QGridLayout()
+        self.direction_buttons = []
+        for text, pos, velocity in [('↑',(0,1),(1,0)),('←',(1,0),(0,1)),('↓',(1,1),(-1,0)),('→',(1,2),(0,-1))]:
+            key = button(text, name='direction')
+            key.setMinimumHeight(36)
+            key.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            key.pressed.connect(lambda v=velocity: self._begin_manual(v))
+            key.released.connect(self._release_manual)
+            self.direction_buttons.append(key)
+            pad.addWidget(key,*pos)
+        ctl.addLayout(pad)
+        limit = QHBoxLayout()
+        limit.addWidget(label('Интенсивность'))
+        self.power_label = label('40%')
+        limit.addStretch()
+        limit.addWidget(self.power_label)
+        ctl.addLayout(limit)
+        self.power = QSlider(Qt.Orientation.Horizontal)
+        self.power.setRange(10,100)
+        self.power.setValue(40)
+        self.power.valueChanged.connect(lambda value: self.power_label.setText(f'{value}%'))
+        ctl.addWidget(self.power)
+        self.keyboard_checkbox = QCheckBox('Клавиатура: WASD / ЦФЫВ / стрелки')
+        self.keyboard_checkbox.setChecked(True)
+        self.keyboard_checkbox.setToolTip('W/Ц — вперёд, S/Ы — назад, A/Ф и D/В — поворот. Можно удерживать две клавиши. Пробел или Esc — СТОП.')
+        self.keyboard_checkbox.toggled.connect(lambda _: self._release_manual())
+        ctl.addWidget(self.keyboard_checkbox)
+        ctl.addStretch()
+        self.control_tabs.addTab(self._scroll_page(manual_page), 'Ручное')
+        route_page = QWidget(objectName='commandPage')
+        route_controls = QVBoxLayout(route_page)
+        route_controls.setContentsMargins(9, 10, 9, 7)
+        route_controls.setSpacing(8)
+        route_controls.addWidget(label('МАРШРУТ НА ДЕМО-КАРТЕ', 'muted'))
+        self.route_info = label('Точек: 0')
+        route_controls.addWidget(self.route_info)
+        route_buttons = QHBoxLayout()
+        self.start_button = button('Запустить', lambda: self._mission_action('start_mission'), 'primary')
+        self.pause_button = button('Пауза', self._pause_resume)
+        route_buttons.addWidget(self.start_button)
+        route_buttons.addWidget(self.pause_button)
+        route_controls.addLayout(route_buttons)
+        more = QHBoxLayout()
+        self.cancel_button = button('Отменить', lambda: self._mission_action('cancel_mission'))
+        self.clear_button = button('Очистить', self._clear_route)
+        more.addWidget(self.cancel_button)
+        more.addWidget(self.clear_button)
+        route_controls.addLayout(more)
+        files = QHBoxLayout()
+        self.load_route_button = button('Загрузить', self._load_route)
+        self.save_route_button = button('Сохранить', self._save_route)
+        files.addWidget(self.load_route_button)
+        files.addWidget(self.save_route_button)
+        route_controls.addLayout(files)
+        route_controls.addWidget(label('Добавьте точки на карте левой кнопкой мыши. Маршрут задаётся отдельно для выбранного устройства.', 'muted', True))
+        route_controls.addStretch()
+        self.control_tabs.addTab(self._scroll_page(route_page), 'Маршрут')
+        control_shell.addWidget(self.control_tabs, 1)
+        self.stop_button = button('СТОП', self._stop, 'stop')
+        control_shell.addWidget(self.stop_button)
+        row_layout.addWidget(controls)
+        splitter.addWidget(row)
+        self.tabs = QTabWidget()
+        self.tabs.setMinimumHeight(140)
+        self.tabs.currentChanged.connect(self._panel_changed)
+        self.telemetry = QTableWidget(0, 3)
+        self.telemetry.setHorizontalHeaderLabels(['Поле выбранной платформы · тестовые данные','Значение','Единица'])
+        self.telemetry.horizontalHeader().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch)
+        self.telemetry.horizontalHeader().setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch)
+        self.telemetry.horizontalHeader().setSectionResizeMode(2,QHeaderView.ResizeMode.ResizeToContents)
+        self.telemetry.verticalHeader().setVisible(False)
+        self.telemetry.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.telemetry.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.tabs.addTab(self.telemetry,'Телеметрия')
+        self.sensor_page = self._build_sensor_page()
+        self.tabs.addTab(self.sensor_page, 'Датчики / TXT')
+        self.warning_table = QTableWidget(0, 3)
+        self.warning_table.setHorizontalHeaderLabels(['Уровень', 'Устройство', 'Активное предупреждение'])
+        self.warning_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.warning_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.warning_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.warning_table.verticalHeader().setVisible(False)
+        self.warning_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.warning_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.warning_table.cellDoubleClicked.connect(self._warning_selected)
+        self.warning_tab_index = self.tabs.addTab(self.warning_table, 'Предупреждения')
+        log_page = QWidget()
+        log_layout = QVBoxLayout(log_page)
+        log_layout.setContentsMargins(8, 7, 8, 0)
+        log_filters = QHBoxLayout()
+        log_filters.addWidget(label('Показывать:'))
+        self.log_scope = QComboBox()
+        self.log_scope.addItems(['Все устройства', 'Выбранное устройство'])
+        self.log_scope.currentIndexChanged.connect(lambda _: self._refresh())
+        log_filters.addWidget(self.log_scope)
+        self.log_level = QComboBox()
+        self.log_level.addItems(['Все события', 'Предупреждения и ошибки'])
+        self.log_level.currentIndexChanged.connect(lambda _: self._refresh())
+        log_filters.addWidget(self.log_level)
+        log_filters.addStretch()
+        log_layout.addLayout(log_filters)
+        self.log = QTextEdit()
+        self.log.setReadOnly(True)
+        self.log.document().setMaximumBlockCount(400)
+        log_layout.addWidget(self.log)
+        self.tabs.addTab(log_page, 'Журнал событий')
+        self.profile_details = label('', wrap=True)
+        self.profile_details.setMargin(18)
+        self.profile_details.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.tabs.addTab(self.profile_details, 'Особенности платформы')
+        self.tabs.addTab(self._placeholder('Камера не настроена','Здесь появится видео после уточнения оборудования и формата потока.\nЗаглушка не подключается к камерам и не показывает фиктивное видео.'),'Камера')
+        self.tabs.addTab(self._placeholder('Точка подключения оборудования','Сейчас используется локальный MockAdapter.\nПосле уточнения протокола здесь будет подключён новый адаптер.\nТестовые поля не являются согласованным контрактом роботов.'),'Интеграция')
+        splitter.addWidget(self.tabs)
+        splitter.setSizes([550,180])
+        splitter.setStretchFactor(0,3)
+        splitter.setStretchFactor(1,1)
+        outer.addWidget(splitter,1)
+        root.addWidget(main,1)
 
     @staticmethod
     def _scroll_page(page):
@@ -100,14 +386,12 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         layout.setContentsMargins(10, 8, 10, 5)
         layout.setSpacing(5)
         files = QHBoxLayout()
-        self.load_sensor_button = button('Загрузить TXT', self._choose_sensor_file, 'primary')
-        files.addWidget(self.load_sensor_button)
+        files.addWidget(button('Загрузить TXT', self._choose_sensor_file, 'primary'))
         self.example_choice = QComboBox()
         for name, filename in [('LiDAR · комната', 'lidar-room.txt'), ('Сонар · поворот катера', 'sonar-route.txt'), ('LiDAR + сонар', 'mixed-route.txt')]:
             self.example_choice.addItem(name, filename)
         files.addWidget(self.example_choice)
-        self.sensor_example_button = button('Открыть пример', self._load_sensor_example)
-        files.addWidget(self.sensor_example_button)
+        files.addWidget(button('Открыть пример', self._load_sensor_example))
         self.return_simulation_button = button('К симуляции', self._leave_replay)
         files.addWidget(self.return_simulation_button)
         files.addStretch()
@@ -147,6 +431,10 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         layout.addWidget(self.sensor_table, 1)
         return self._scroll_page(page)
 
+    def _panel_changed(self, index):
+        if hasattr(self, 'sensor_page') and self.tabs.widget(index) is self.sensor_page:
+            self.splitter.setSizes([440, 260])
+
     def _set_map_layer(self, name, value):
         setattr(self.map, name, value)
         self.map.update()
@@ -160,62 +448,31 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         self._open_sensor_file(Path(__file__).resolve().parents[1] / 'examples' / self.example_choice.currentData())
 
     def _open_sensor_file(self, path):
-        request_id = self.recording_loader.start(path, self.selected_id)
-        self._pending_imports[self.selected_id] = request_id
-        self.statusBar().showMessage('Подготовка TXT в фоне. Текущий источник сохраняется до проверки файла.')
-        self._refresh()
-        return request_id
-
-    def _recording_ready(self, request_id, platform_id, player):
-        if self._closing or self._pending_imports.get(platform_id) != request_id:
-            return
-        self._pending_imports.pop(platform_id, None)
-        self._install_sensor_player(player, platform_id)
-        self.statusBar().showMessage(f'Загружен TXT для {platform_id}: {Path(player.recording.source_path).name}', 5000)
-
-    def _recording_failed(self, request_id, platform_id, message):
-        if self._closing or self._pending_imports.get(platform_id) != request_id:
-            return
-        self._pending_imports.pop(platform_id, None)
-        self.service.note(platform_id, f'Не удалось загрузить TXT: {message}', 'WARNING')
-        self._refresh()
-        self.statusBar().showMessage(f'Ошибка TXT для {platform_id}: {message}', 7000)
-        if platform_id == self.selected_id:
-            QMessageBox.warning(self, 'Не удалось загрузить датчики', message)
+        try:
+            self.load_sensor_file(path)
+        except (OSError, ValueError) as error:
+            QMessageBox.warning(self, 'Не удалось загрузить датчики', str(error))
 
     def load_sensor_file(self, path):
-        # Synchronous public API for scripts/tests. GUI actions use the worker.
+        # Validate completely before replacing the current source or stopping it.
         player = RecordingPlayer(load_recording(path))
-        self._pending_imports.pop(self.selected_id, None)
-        self._install_sensor_player(player, self.selected_id)
+        self._release_manual()
+        self.service.stop(self.selected_id)
+        self._replays[self.selected_id] = player
+        self.map.reset_observations(self.selected_id)
+        self.map.bounds = player.bounds
+        self.map.fit_map()
+        self._ingest_recording(player, rebuild=True)
+        self.service.note(self.selected_id, f'Загружена запись датчиков: {Path(path).name}. Управление при просмотре записи отключено.')
+        for warning in player.recording.warnings:
+            self.service.note(self.selected_id, warning, 'WARNING')
+        self.tabs.setCurrentWidget(self.sensor_page)
+        self._refresh()
         return True
 
-    def _install_sensor_player(self, player, platform_id):
-        # Parsing succeeded completely before any simulation or source is changed.
-        selected = platform_id == self.selected_id
-        if selected:
-            self._release_manual()
-        self.service.stop(platform_id)
-        self._replays[platform_id] = player
-        self.map.reset_observations(platform_id)
-        if selected:
-            self.map.bounds = player.bounds
-            self.map.fit_map()
-        self._ingest_recording(player, rebuild=True, platform_id=platform_id)
-        self.service.note(platform_id, f'Загружена запись датчиков: {Path(player.recording.source_path).name}. Управление при просмотре записи отключено.')
-        for warning in player.recording.warnings:
-            self.service.note(platform_id, warning, 'WARNING')
-        if selected:
-            self._set_workspace('sensors')
-        self._refresh()
-
     def _leave_replay(self):
-        cancelled = self._pending_imports.pop(self.selected_id, None) is not None
         player = self._replays.pop(self.selected_id, None)
         if player is None:
-            if cancelled:
-                self.statusBar().showMessage('Загрузка TXT отменена. Текущий источник сохранён.', 5000)
-                self._refresh()
             return
         self.map.reset_observations(self.selected_id)
         self.map.bounds = (0, 100, 0, 70)
@@ -223,13 +480,12 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         self.service.note(self.selected_id, 'Просмотр записи завершён. Снова отображаются имитируемые датчики.')
         self._refresh()
 
-    def _ingest_recording(self, player, rebuild=False, previous_index=None, platform_id=None):
-        platform_id = platform_id or self.selected_id
+    def _ingest_recording(self, player, rebuild=False, previous_index=None):
         if rebuild:
-            self.map.reset_observations(platform_id)
+            self.map.reset_observations(self.selected_id)
         first = 0 if rebuild else (player.index if previous_index is None else previous_index + 1)
         for frame in player.recording.frames[first:player.index + 1]:
-            self.map.ingest_frame(platform_id, frame)
+            self.map.ingest_frame(self.selected_id, frame)
 
     def _seek_recording(self, position):
         player = self._replays.get(self.selected_id)
@@ -277,11 +533,9 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
             getattr(self.service,method)(self.selected_id,*args)
         except (ValueError, RuntimeError, KeyError) as error:
             self.service.note(self.selected_id, str(error), 'WARNING')
-            self._record_command(method, str(error))
             self.statusBar().showMessage(str(error),7000)
             self._refresh()
             return False
-        self._record_command(method)
         self._refresh()
         return True
 
@@ -289,7 +543,6 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         self._release_manual()
         if current:
             self.selected_id = current.data(Qt.ItemDataRole.UserRole)
-            self._animate_context()
             self.map.fit_map()
             self._refresh()
 
@@ -320,15 +573,12 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
             self.map.update()
 
     def _begin_manual(self,velocity):
-        if self.selected_id not in self._replays and 'manual' in self.state.info.capabilities and self.state.connected and self.state.telemetry_age_s is not None and self.state.telemetry_age_s <= 2 and self.state.mission_status not in ('RUNNING','PAUSED'):
+        if self.selected_id not in self._replays and 'manual' in self.state.info.capabilities and self.state.connected and self.state.mission_status not in ('RUNNING','PAUSED'):
             self._manual=velocity
             self._send_manual()
 
     def _send_manual(self):
         if self.selected_id in self._replays:
-            return
-        if self.state.telemetry_age_s is None or self.state.telemetry_age_s > 2:
-            self._release_manual()
             return
         velocity=self._manual
         if self.keyboard_checkbox.isEnabled() and self.keyboard_checkbox.isChecked() and self._keys:
@@ -385,7 +635,6 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         self._leave_replay()
         self._call('reset')
         self.trails[self.selected_id].clear()
-        self._speed_history[self.selected_id].clear()
         self.map.reset_observations(self.selected_id)
 
     def _save_route(self):
@@ -456,7 +705,6 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
             player.speed = self.play_speed.currentData()
             player.advance(dt)
             self._ingest_recording(player, previous_index=previous)
-        self._sample_metrics()
         self._refresh()
 
     @staticmethod
@@ -471,7 +719,7 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         player = self._replays.get(self.selected_id)
         profile = profile_for(state.info.kind)
         connected = sum(s.connected for s in self.service.platforms.values())
-        self.overall_status.setText(f'{connected} из {len(self.service.platforms)} подключено')
+        self.overall_status.setText(f'Сим-источники: {connected} / {len(self.service.platforms)}')
         for row in range(self.platform_list.count()):
             item = self.platform_list.item(row)
             source = self.service.platforms[item.data(Qt.ItemDataRole.UserRole)]
@@ -510,7 +758,7 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
                 tooltip += ' Значение не является актуальным.'
             self.metric_values[key].setToolTip(tooltip)
             color = '#8a98a8' if not state.connected or stale or value is None else (
-                '#b43d46' if value <= 10 else '#976715' if value <= warning_threshold else '#23735c'
+                '#b33d35' if value <= 10 else '#a76c17' if value <= warning_threshold else '#168d79'
             )
             self.metric_values[key].setStyleSheet(f'color: {color};')
             bar = self.metric_bars[key]
@@ -525,28 +773,24 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
             self.metric_values['position'].setToolTip(f'Положение из TXT в локальной системе, метры. X={state.pose.x:.2f}, Y={state.pose.y:.2f}, курс={state.pose.heading:.1f}°. Между отсчётами применяется интерполяция.')
         self.metric_values['position'].setStyleSheet('color: #213c55;' if state.connected else 'color: #8a98a8;')
         self.metric_values['speed'].setText(f'{state.speed:.2f}')
-        for key in ('speed', 'position'):
-            self.metric_values[key].setStyleSheet('color: #9295a1;' if not state.connected or stale else 'color: #252733;')
-            if not state.connected or stale:
-                self.metric_values[key].setToolTip('Последнее полученное значение. Данные не актуальны.')
         self.route_info.setText(f'Точек: {len(state.route)}   ·   Пройдено: {min(state.waypoint_index, len(state.route))}')
         manual = player is None and 'manual' in state.info.capabilities
         mission = player is None and 'mission' in state.info.capabilities
         idle = state.mission_status not in ('RUNNING', 'PAUSED')
-        self.start_button.setEnabled(mission and state.connected and not stale and bool(state.route) and idle)
+        self.start_button.setEnabled(mission and state.connected and bool(state.route) and idle)
         self.pause_button.setText('Продолжить' if state.mission_status == 'PAUSED' else 'Пауза')
-        self.pause_button.setEnabled(mission and state.connected and not stale and not idle)
+        self.pause_button.setEnabled(mission and state.connected and not idle)
         self.cancel_button.setEnabled(player is None and not idle)
         self.clear_button.setEnabled(mission and idle)
         self.load_route_button.setEnabled(mission and idle)
         self.save_route_button.setEnabled(mission and bool(state.route))
         self.edit_checkbox.setEnabled(mission and idle)
-        manual_enabled = manual and state.connected and not stale and idle
+        manual_enabled = manual and state.connected and idle
         self.keyboard_checkbox.setEnabled(manual_enabled)
         if not manual_enabled:
             self._release_manual()
         for index, control in enumerate(self.direction_buttons):
-            control.setEnabled(manual_enabled)
+            control.setEnabled(manual and state.connected and idle)
             control.setToolTip(('Вперёд', 'Поворот влево', 'Назад', 'Поворот вправо')[index] + ' · ' + state.info.kind if manual else 'Адаптер не поддерживает ручное управление')
         if not manual:
             self.keyboard_checkbox.setToolTip('Ручное управление недоступно в возможностях адаптера.')
@@ -593,15 +837,10 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         self._refresh_alerts()
         self._refresh_events()
         self._refresh_sensor_panel(state.sensor_frame, player)
-        self._refresh_workspace()
 
     def _refresh_sensor_panel(self, frame, player):
         for control in (self.play_button, self.playhead, self.play_speed, self.return_simulation_button):
             control.setEnabled(player is not None)
-        loading = self.selected_id in self._pending_imports
-        self.load_sensor_button.setEnabled(not loading)
-        self.sensor_example_button.setEnabled(not loading)
-        self.return_simulation_button.setEnabled(player is not None or loading)
         if player:
             self.play_button.setText('Пауза' if player.playing else 'Воспроизвести')
             elapsed, duration = player.time_s - player.times[0], player.recording.duration
@@ -613,8 +852,6 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         else:
             self.play_time.setText('Симуляция')
             self.sensor_source.setText('Имитируемые датчики · Трек по локализации · LiDAR — точки, сонар — дуги · Для загрузки файла нажмите «Загрузить TXT».')
-        if loading:
-            self.sensor_source.setText('Подготовка TXT в фоне… Текущий источник сохранён. «К симуляции» отменяет загрузку.')
         readings = frame.readings[:500] if frame else ()
         self.sensor_table.setRowCount(len(readings))
         for row, reading in enumerate(readings):
@@ -668,8 +905,6 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         else:
             self.alert_summary.setText('ПРЕДУПРЕЖДЕНИЯ · Нет активных предупреждений в демо-источниках')
             color, background = '#326956', '#e9f4ef'
-        self.alert_summary.setVisible(bool(alerts))
-        self.alert_summary.setToolTip(self.alert_summary.text())
         self.alert_summary.setStyleSheet(f'color: {color}; background: {background}; border-radius: 6px; padding: 7px 10px;')
 
     def _refresh_events(self):
@@ -784,8 +1019,6 @@ class OperatorWindow(WorkspaceMixin, QMainWindow):
         super().changeEvent(event)
 
     def closeEvent(self,event):
-        self._closing = True
-        self._pending_imports.clear()
         self._release_manual()
         self.timer.stop()
         QApplication.instance().removeEventFilter(self)
