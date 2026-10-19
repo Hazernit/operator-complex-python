@@ -14,6 +14,15 @@
 
 [Карта и датчики](docs/screenshots/sensors.png) · [Телеметрия](docs/screenshots/telemetry.png) · [Подробное руководство](docs/PROTOTYPE_GUIDE.md) · [Задачи проекта](https://github.com/Hazernit/operator-complex-python/issues)
 
+## Скачать готовую бета-сборку
+
+**[GitHub Releases — версии приложения для загрузки](https://github.com/Hazernit/operator-complex-python/releases).** Выберите опубликованный **Pre-release** с наиболее свежим номером; до выхода первого выпуска эта страница может быть пустой. Раздел *Assets* содержит архивы приложений, а автоматические *Source code (zip/tar.gz)* — **только исходный код**.
+
+- **Windows 10/11 x64:** скачайте ZIP для Windows, распакуйте весь архив и откройте `OperatorComplexNewInterface.exe`. Диагностический `Start-OperatorComplexNewInterface.bat` запускает ту же программу с консолью. Python включён, папки `runtime/` и `app/` обязательны.
+- **Mac Apple Silicon (M1–M4 и новее):** скачайте ZIP для macOS arm64, распакуйте `OperatorComplexNewInterface.app` и откройте его или перенесите в «Программы». Поддерживается macOS 14.4+; сборки для Intel Mac пока нет.
+
+**Это предварительные сборки:** исходный Windows ZIP не проходил подтверждённого запуска на настоящем компьютере Windows, а macOS-приложение не имеет подтверждённых Developer ID/нотаризации и может потребовать разрешения в Gatekeeper. [Публикация, ограничения и обновления](docs/BETA_RELEASES.md). Встроенное автообновление пока не предусмотрено; новые беты публикуются отдельными выпусками с собственными тегами.
+
 ## Что реализовано, а что ещё нет
 
 | Возможность | Состояние в `main` | Что важно знать |
