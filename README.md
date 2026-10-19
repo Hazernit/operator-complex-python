@@ -198,8 +198,3 @@ python scripts/capture_workspace.py
 ```
 
 Скрипт использует реальный Qt с offscreen-отрисовкой и сохраняет PNG в `output/screenshots`. Его сценарий отправляет команды только локальной симуляции. Для проверки HiDPI можно запустить с `QT_SCALE_FACTOR=2`. Состояния на снимках получены от модели или записи, а не подставлены в интерфейс.
-
-
-## Командная разработка через GitHub
-
-Для публикации репозитория и защиты ветки `main` см. [GITHUB_SETUP.md](GITHUB_SETUP.md). Порядок работы с ветками и Pull Request: [CONTRIBUTING.md](CONTRIBUTING.md).
