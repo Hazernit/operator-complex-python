@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, docs/readme-audit-ci-hardening]
 
 permissions:
   contents: read
@@ -40,6 +40,9 @@ jobs:
           python -m pip install -e .
       - name: Run full test suite (zero skipped)
         run: python scripts/ci_test_runner.py
+      - name: Repeat RecordingLoader tests 20 times (zero skipped)
+        if: runner.os == 'Linux'
+        run: python scripts/ci_test_runner.py --pattern test_recording_loader.py --repeat 20
       - name: GUI smoke test (headless)
         run: python main.py --smoke-test
       - name: Verify launcher build is reproducible
