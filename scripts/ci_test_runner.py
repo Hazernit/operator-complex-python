@@ -6,7 +6,9 @@ an ImportError. This runner makes Qt import errors visible and skips fatal.
 
 from __future__ import annotations
 
+import argparse
 import sys
+import time
 import traceback
 import unittest
 from pathlib import Path
@@ -33,27 +35,69 @@ def check_qt_available() -> bool:
     return True
 
 
-def main() -> int:
+def positive_integer(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a positive integer") from error
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--pattern", default="test*.py", help="unittest discovery filename pattern")
+    parser.add_argument("--repeat", type=positive_integer, default=1, help="number of suite repetitions")
+    args = parser.parse_args(argv)
+
     if not check_qt_available():
         return 2
 
-    suite = unittest.defaultTestLoader.discover("tests")
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    passed = result.testsRun - len(result.skipped) - len(result.failures) - len(result.errors)
+    totals = dict(discovered=0, passed=0, skipped=0, failures=0, errors=0)
+    started = time.monotonic()
+    exit_code = 0
+    for repetition in range(1, args.repeat + 1):
+        print(f"CI repetition {repetition}/{args.repeat}: pattern={args.pattern}", flush=True)
+        repetition_started = time.monotonic()
+        # unittest consumes suites as they run. Discover fresh test instances
+        # each time, retaining the Qt application to exercise task cleanup too.
+        suite = unittest.defaultTestLoader.discover("tests", pattern=args.pattern)
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
+        counts = dict(
+            discovered=result.testsRun,
+            passed=result.testsRun - len(result.skipped) - len(result.failures) - len(result.errors),
+            skipped=len(result.skipped),
+            failures=len(result.failures),
+            errors=len(result.errors),
+        )
+        for key, count in counts.items():
+            totals[key] += count
+        print(
+            f"CI repetition {repetition}/{args.repeat} result: "
+            + " ".join(f"{key}={count}" for key, count in counts.items())
+            + f" elapsed={time.monotonic() - repetition_started:.3f}s",
+            flush=True,
+        )
+        if not result.testsRun:
+            print("ERROR: test discovery found zero tests", file=sys.stderr)
+            exit_code = 1
+        if result.skipped:
+            print("ERROR: unexpected unittest skips are not allowed in CI:", file=sys.stderr)
+            for case, reason in result.skipped:
+                print(f"  - {case.id()}: {reason}", file=sys.stderr)
+            exit_code = 1
+        if not result.wasSuccessful():
+            exit_code = 1
+        if exit_code:
+            break
+
     print(
-        f"CI result: discovered={result.testsRun} passed={passed} "
-        f"skipped={len(result.skipped)} failures={len(result.failures)} errors={len(result.errors)}",
+        "CI result: " + " ".join(f"{key}={count}" for key, count in totals.items())
+        + f" repetitions={repetition}/{args.repeat} elapsed={time.monotonic() - started:.3f}s",
         flush=True,
     )
-    if not result.testsRun:
-        print("ERROR: test discovery found zero tests", file=sys.stderr)
-        return 1
-    if result.skipped:
-        print("ERROR: unexpected unittest skips are not allowed in CI:", file=sys.stderr)
-        for case, reason in result.skipped:
-            print(f"  - {case.id()}: {reason}", file=sys.stderr)
-        return 1
-    return 0 if result.wasSuccessful() else 1
+    return exit_code
 
 
 if __name__ == "__main__":
