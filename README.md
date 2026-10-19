@@ -14,14 +14,38 @@
 
 [Карта и датчики](docs/screenshots/sensors.png) · [Телеметрия](docs/screenshots/telemetry.png) · [Подробное руководство](docs/PROTOTYPE_GUIDE.md) · [Задачи проекта](https://github.com/Hazernit/operator-complex-python/issues)
 
-## Скачать готовую бета-сборку
+## Скачать приложение — две бета-версии
 
-**[GitHub Releases — версии приложения для загрузки](https://github.com/Hazernit/operator-complex-python/releases).** Выберите опубликованный **Pre-release** с наиболее свежим номером; до выхода первого выпуска эта страница может быть пустой. Раздел *Assets* содержит архивы приложений, а автоматические *Source code (zip/tar.gz)* — **только исходный код**.
+**Обе редакции уже опубликованы** в [GitHub Releases](https://github.com/Hazernit/operator-complex-python/releases) и доступны независимо друг от друга. **Technical 0.3** сохраняет техническое представление, **New Interface 0.4** предлагает новый рабочий интерфейс. Пока это **два отдельных направления**, а не замена старой функциональности новым дизайном.
 
-- **Windows 10/11 x64:** скачайте ZIP для Windows, распакуйте весь архив и откройте `OperatorComplexNewInterface.exe`. Диагностический `Start-OperatorComplexNewInterface.bat` запускает ту же программу с консолью. Python включён, папки `runtime/` и `app/` обязательны.
-- **Mac Apple Silicon (M1–M4 и новее):** скачайте ZIP для macOS arm64, распакуйте `OperatorComplexNewInterface.app` и откройте его или перенесите в «Программы». Поддерживается macOS 14.4+; сборки для Intel Mac пока нет.
+| Редакция | Windows 10/11 x64 | macOS Apple Silicon |
+| --- | --- | --- |
+| **Technical 0.3 — Beta 1** | [Скачать EXE + BAT в ZIP](https://github.com/Hazernit/operator-complex-python/releases/download/v0.3.0-beta.1/OperatorComplex-v0.3.0-beta.1-Windows-x64.zip) | [Скачать APP в ZIP](https://github.com/Hazernit/operator-complex-python/releases/download/v0.3.0-beta.1/OperatorComplex-v0.3.0-beta.1-macOS-arm64.zip) |
+| **New Interface 0.4 — Beta 1** | [Скачать EXE + BAT в ZIP](https://github.com/Hazernit/operator-complex-python/releases/download/v0.4.0-beta.1/OperatorComplex-v0.4.0-beta.1-Windows-x64.zip) | [Скачать APP в ZIP](https://github.com/Hazernit/operator-complex-python/releases/download/v0.4.0-beta.1/OperatorComplex-v0.4.0-beta.1-macOS-arm64.zip) |
 
-**Это предварительные сборки:** исходный Windows ZIP не проходил подтверждённого запуска на настоящем компьютере Windows, а macOS-приложение не имеет подтверждённых Developer ID/нотаризации и может потребовать разрешения в Gatekeeper. [Публикация, ограничения и обновления](docs/BETA_RELEASES.md). Встроенное автообновление пока не предусмотрено; новые беты публикуются отдельными выпусками с собственными тегами.
+На **Windows** полностью распакуйте ZIP и запускайте `OperatorComplex.exe` / `Start-OperatorComplex.bat` для Technical либо `OperatorComplexNewInterface.exe` / `Start-OperatorComplexNewInterface.bat` для New Interface. Не переносите EXE отдельно от остальных файлов. На **Mac с Apple Silicon** (macOS 14.4+) распакуйте ZIP и откройте `OperatorComplex.app` либо `OperatorComplexNewInterface.app`. **Python отдельно устанавливать не нужно.** Для Intel Mac готового пакета пока нет.
+
+Для каждой версии есть [страница релиза Technical](https://github.com/Hazernit/operator-complex-python/releases/tag/v0.3.0-beta.1) и [страница релиза New Interface](https://github.com/Hazernit/operator-complex-python/releases/tag/v0.4.0-beta.1) с `SHA256SUMS.txt`. Не путайте архивы приложений в **Assets** с автоматически созданными архивами **Source code**, содержащими только исходники.
+
+**Ограничения беты:** исходные Windows ZIP Beta 1 пока не прошли отдельный подтверждённый запуск на пользовательском Windows-компьютере (будущие сборки проверяются в Windows CI); macOS-пакеты не нотариализованы Apple. Возможны предупреждения SmartScreen/Gatekeeper. Оба приложения используют **демонстрационные данные**, а не управляют физическими роботами.
+
+### Как собрать и опубликовать следующую бету через GitHub Actions
+
+1. **Сначала внесите изменения** и проверьте их через Pull Request: `develop/technical` — исходники Technical 0.3; `main` — исходники New Interface 0.4. Убедитесь, что нужные изменения уже в соответствующей ветке.
+2. Откройте [**Actions → Desktop beta packages**](https://github.com/Hazernit/operator-complex-python/actions/workflows/desktop-betas.yml), нажмите **Run workflow** и оставьте ветку запуска workflow **`main`** (там лежат инструменты сборки). Исходники нужной редакции workflow заберёт автоматически.
+3. Выберите **`edition`** и укажите **новый, ещё не существующий `tag`**:
+
+   | Редакция | edition | Пример следующего тега | Откуда собирается |
+   | --- | --- | --- | --- |
+   | Technical | `technical` | `v0.3.0-beta.2` | `develop/technical` |
+   | New Interface | `new-interface` | `v0.4.0-beta.2` | `main` |
+
+4. Нажмите **Run workflow**. GitHub соберёт приложения на **Windows x64 и macOS Apple Silicon**, проверит ресурсы и GUI-запуск готовых `.exe`/`.bat`/`.app` и создаст архивы. **Только после успешной проверки обеих ОС** будет опубликован новый **Pre-release** с ZIP и `SHA256SUMS.txt`.
+5. Перейдите в [**Releases**](https://github.com/Hazernit/operator-complex-python/releases), откройте выпуск с новым тегом и проверьте наличие **двух ZIP** (Windows и macOS) и контрольных сумм. Предыдущие версии остаются доступными; **повторно использовать тег Beta 1 или перезаписывать старый Release нельзя**.
+
+**Нужно только протестировать сборку без публикации?** Изменения в инструментах упаковки проверяются в Pull Request: workflow собирает обе редакции и сохраняет проверенные ZIP как временные **Actions artifacts**, но **не создаёт Release**. Ручная команда **Run workflow**, напротив, предназначена для **выпуска новой беты**.
+
+**Обновление приложения:** при появлении новой беты пользователь пока скачивает свежий ZIP из Releases и заменяет прежнюю версию вручную. **Встроенного автообновления нет.** Подробности и ограничения: [инструкция по релизам](docs/RELEASES.md) и [документация сборок](docs/BETA_RELEASES.md).
 
 ## Что реализовано, а что ещё нет
 
@@ -39,7 +63,7 @@
 
 ## Быстрый запуск
 
-Исходники доступны в [публичном репозитории](https://github.com/Hazernit/operator-complex-python). **Это исходный код, а не готовый установщик или GitHub Release.** Нужен Python **3.11 или новее**; при первом запуске может понадобиться интернет для зависимостей. Локальное окружение `.venv` не хранится в Git.
+Этот раздел — для **запуска из исходного кода**. Для готового EXE/APP без установки Python используйте ссылки в [разделе скачивания](#скачать-приложение--две-бета-версии). Исходники доступны в [репозитории](https://github.com/Hazernit/operator-complex-python); для ручного запуска нужен Python **3.11 или новее**. При первом запуске может понадобиться интернет для зависимостей. Локальное окружение `.venv` не хранится в Git.
 
 Склонируйте репозиторий любым удобным способом (HTTPS не требует предварительной настройки SSH для публичного чтения):
 
@@ -158,7 +182,7 @@ python main.py --smoke-test
 
 Проверка скриншотов на системе с работающим Qt: `python scripts/capture_workspace.py` (создаёт локальные файлы `output/screenshots/`, которые не коммитятся автоматически).
 
-Автоматическая проверка GitHub Actions: [Python tests](https://github.com/Hazernit/operator-complex-python/actions/workflows/tests.yml). Её статус нужно читать вместе с **количеством пропущенных тестов**: первоначальный зелёный запуск после переноса запускателей имел **202 теста, 76 skipped**. Работа над строгими CI-проверками ведётся отдельно; подробности и текущая проверка — в [плане улучшений](docs/IMPROVEMENT_BACKLOG.md) и [отчёте проверок](docs/ui-validation.md).
+Проверка исходников: [Python tests](https://github.com/Hazernit/operator-complex-python/actions/workflows/tests.yml) на **Windows, macOS и Ubuntu**. Текущий строгий CI требует успешных GUI-тестов **без пропусков**; ранее встречавшиеся 76 скрытых `skipped` устранены. Проверка **готовых бинарников** выполняется отдельно в [Desktop beta packages](https://github.com/Hazernit/operator-complex-python/actions/workflows/desktop-betas.yml). Детали расследования и история результатов: [docs/recording-loader-ci-investigation.md](docs/recording-loader-ci-investigation.md) и [docs/ui-validation.md](docs/ui-validation.md).
 
 ## Документы и работа над проектом
 
@@ -166,7 +190,8 @@ python main.py --smoke-test
 - [GITHUB_SETUP.md](GITHUB_SETUP.md) — доступ участников и защита `main` (репозиторий **уже создан**).
 - [docs/PROTOTYPE_GUIDE.md](docs/PROTOTYPE_GUIDE.md) — техническое руководство по интерфейсу, карте, датчикам и динамике.
 - [docs/design-system.md](docs/design-system.md) · [docs/ui-audit.md](docs/ui-audit.md) · [docs/ui-validation.md](docs/ui-validation.md) — интерфейс и доказательства проверок.
-- [docs/universal-launcher.md](docs/universal-launcher.md) — Windows-запускатели и ограничения.
+- [docs/universal-launcher.md](docs/universal-launcher.md) — Windows-запускатели из исходников и ограничения.
+- [docs/RELEASES.md](docs/RELEASES.md) · [docs/BETA_RELEASES.md](docs/BETA_RELEASES.md) — публикация двух редакций, сборки GitHub Actions и обновления.
 - [docs/REPOSITORY_AUDIT_PLAYBOOK.md](docs/REPOSITORY_AUDIT_PLAYBOOK.md) — постоянный стандарт глубокого аудита.
 - [docs/IMPROVEMENT_BACKLOG.md](docs/IMPROVEMENT_BACKLOG.md) — незавершённые и подтверждённые улучшения.
 
