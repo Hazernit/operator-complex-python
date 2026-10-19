@@ -1,63 +1,59 @@
-# Как работать в команде
+# Командная разработка: Issues → ветка → Pull Request → проверка
 
-## Роли
+В проекте четыре направления: **backend**, **адаптеры/эмуляторы**, **dashboard**, **миссии/интеграция**. Их задачи отслеживаются в [GitHub Issues](https://github.com/Hazernit/operator-complex-python/issues), а код объединяется в защищённую ветку `main`.
 
-- Владелец репозитория — **@Hazernit**. Только он обновляет `main` и сливает PR.
-- Участники получают доступ **Write**, но **не Admin**. Их изменения — только в отдельных ветках.
-- Изменения в `main` защищает **GitHub Ruleset**. `CODEOWNERS` сам по себе не блокирует пуш.
+## Права и ответственность
 
-## Начало работы
+- **@Hazernit** — владелец и CODEOWNER. Право обновлять `main` и завершать Pull Request в неё зарезервировано за ним через активный Ruleset.
+- Остальные получают **Write, не Admin**. Можно создавать/пушить `feature/*`, создавать Issues и Pull Requests; **нельзя напрямую обновлять `main`**.
+- Уже существуют ветки направлений: `feature/backend`, `feature/adapters`, `feature/dashboard`, `feature/missions`. Наличие ветки не делает её закрытой для других: GitHub не выдаёт права «только своему разработчику» автоматически.
+- Для отдельной задачи лучше создать короткоживущую ветку `feature/<issue>-<краткое-название>` от свежего `main`, чтобы PR был небольшим и легко проверялся.
+
+## Первая настройка
 
 ```bash
 git clone https://github.com/Hazernit/operator-complex-python.git
 cd operator-complex-python
-git switch -c feature/your-task
-```
-
-Для уже клонированного репозитория перед новой задачей:
-
-```bash
 git switch main
 git pull --ff-only origin main
-git switch -c feature/your-next-task
+git switch -c feature/4-mock-adapters
 ```
 
-Не работать непосредственно в `main`, не использовать `git push --force`.
+SSH-ссылка `git@github.com:Hazernit/operator-complex-python.git` тоже подходит, если в вашем GitHub-аккаунте уже настроен SSH-ключ. Для `push` требуется принятое приглашение в collaborators.
 
-## Фиксация и Pull Request
+## Работа над задачей
+
+1. Выберите Issue из своего направления, уточните входные/выходные данные и **Definition of Done**.
+2. Создайте ветку от актуального `main`; реализуйте функцию и тесты, не смешивая чужие направления без согласования.
+3. Запускайте локально: `python -m unittest discover -s tests -v`, для GUI — `python main.py --smoke-test` (с PySide6). Указывайте **пропуски тестов** отдельно.
+4. Зафиксируйте и отправьте изменение:
 
 ```bash
 git status
-git add .
-git commit -m "feat: add platform adapter"
-git push -u origin feature/your-task
+git add -A
+git commit -m "feat: implement mock adapter (#4)"
+git push -u origin feature/4-mock-adapters
 ```
 
-Затем на GitHub: **Compare & pull request** → `base: main` → заполнить шаблон → дождаться тестов и решения @Hazernit. Право на изменение `main` должно оставаться только у владельца.
+5. Создайте PR: **base `main`**, head ваша ветка. Опишите проблему, изменённые файлы, тесты и ограничения; приложите скриншоты при изменении UI. Упомяните Issue (`Closes #4` только если задача действительно закрывается).
+6. Дождитесь CI, ревью владельца; исправления отправляйте в **ту же** ветку — PR обновится автоматически.
 
-Если нужно исправить Pull Request, коммитить в **ту же** ветку и делать `git push` — PR обновится автоматически.
-
-## При конфликтах с main
+## Если `main` изменилась
 
 ```bash
 git fetch origin
-git switch feature/your-task
+git switch feature/4-mock-adapters
 git merge origin/main
-# исправить конфликты, прогнать тесты
-git add .
-git commit
-git push
 ```
 
-## Проверки
+Разрешите конфликты, выполните тесты, затем `git add -A`, `git commit` и `git push`. Не применяйте `git push --force` к общим веткам. Нельзя использовать `main` или ветку сохранённой версии (`version/*`) для собственной разработки.
 
-```bash
-python -m pip install -e .
-python -m unittest discover -s tests -v
-```
+## Зависимости и интеграция
 
-GUI-тесты используют Qt offscreen; при запуске на сервере понадобится `QT_QPA_PLATFORM=offscreen`.
+Перед независимой разработкой согласуйте `VehicleTelemetry`, `VehicleCommand`, `Mission`, `MissionEvent`: идентификаторы, единицы, таймстемпы, подтверждение команды и статусы. До готовности backend работайте через mock на своей границе. Не выдавайте симуляцию за работающий ROS 2/реальный робот.
 
-## Важно
+Отдельная документация: [GitHub-правила](GITHUB_SETUP.md), [архитектура и roadmap](README.md#план-разработки), [стандарт аудита](docs/REPOSITORY_AUDIT_PLAYBOOK.md).
 
-В репозиторий нельзя отправлять токены, пароли, приватные SSH-ключи, реальные данные оборудования или персональные файлы. Создавать и изменять ruleset могут только администраторы; **не выдавать участникам Admin**.
+## Безопасность
+
+Не публикуйте `.env`, пароли, ключи, `.venv`, настоящую телеметрию устройств, конфиденциальные логи или персональные данные. При работе с физическими платформами STOP из локального прототипа **не заменяет аппаратный safety-контур**. Не выдавайте участникам Admin.

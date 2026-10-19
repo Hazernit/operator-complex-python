@@ -1,94 +1,60 @@
-# Публикация проекта и работа командой на GitHub
+# GitHub: доступ, защита `main`, приглашения и работа команды
 
-GitHub-владелец: **@Hazernit**. Название по умолчанию: **operator-complex-python**.
+**Действующий публичный репозиторий:** [Hazernit/operator-complex-python](https://github.com/Hazernit/operator-complex-python) — **уже создан и содержит код**. Повторно запускать `./scripts/publish_github.sh public` **не нужно**: этот скрипт предназначен для первичной публикации и останавливается, если репозиторий уже существует.
 
-## Что уже подготовлено
+## Актуальная схема доступа
 
-- `.gitignore` защищает от случайной публикации типовых секретов, виртуальных окружений и генерируемых файлов.
-- `.github/CODEOWNERS` назначает **@Hazernit** владельцем всего кода (но сам по себе не запрещает push).
-- `.github/workflows/tests.yml` запускает unittest при push в `main` и на PR.
-- Шаблон Pull Request и `CONTRIBUTING.md` описывают рабочий процесс.
-- `scripts/publish_github.sh` публикует проект и вызывает REST API GitHub, чтобы настроить **активный ruleset** для `main`.
-- `scripts/invite_collaborators.sh` приглашает людей **без прав администратора**.
+- Владелец: **@Hazernit**; только он может обновлять `main` и завершать слияние в неё при действующих правилах.
+- GitHub Ruleset: [**Protect main - Hazernit only**](https://github.com/Hazernit/operator-complex-python/settings/rules) (active, target `main`, bypass `@Hazernit`).
+- Для остальных: `Write` (не `Admin`), рабочие ветки и Pull Requests с ревью владельца. `CODEOWNERS` = `@Hazernit` назначает ревьюера; фактические ограничения устанавливает Ruleset на сервере GitHub.
+- Публичный репозиторий можно читать без приглашения; приглашение даёт доступ **на запись**. Не путать возможность читать с правом пушить.
 
-## Один раз на Mac
-
-Установить GitHub CLI, если его нет:
+Для проверки текущих правил под учётной записью владельца:
 
 ```bash
-brew install gh
-```
-
-Выполнить вход **под @Hazernit** и настроить авторство Git-коммитов:
-
-```bash
-gh auth login
-git config --global user.name "Твоё имя или ник для Git"
-git config --global user.email "Твой email из GitHub (можно noreply)"
-```
-
-Зайди в папку этого проекта (где лежит `pyproject.toml`) и выбери режим публикации:
-
-```bash
-./scripts/publish_github.sh public
-```
-
-Для **приватного** репозитория **понадобится GitHub Pro или подходящий план организации**, иначе GitHub Free не гарантирует защиту `main` через rulesets. Если GitHub Pro уже есть:
-
-```bash
-./scripts/publish_github.sh private
-```
-
-Публичный репозиторий виден всем, даже тем, кого не приглашали; незнакомые люди не могут в него пушить. Приватный доступен только приглашённым пользователям.
-
-**Важно:** если скрипт напишет, что ruleset НЕ установлен, **никого не приглашай**, пока не исправишь ошибку. Скрипт не удаляет опубликованный репозиторий при такой ошибке, чтобы не потерять данные.
-
-## Добавить участников
-
-После успешного подтверждения защиты `main`:
-
-```bash
-./scripts/invite_collaborators.sh githubUser1 githubUser2
-```
-
-Они получат приглашения с правом **Write** (не Admin), должны принять их в GitHub. Владелец остаётся единственным, кто может обновлять `main` и сливать PR.
-
-## Как должна работать защита
-
-`Settings` → `Rules` → `Rulesets` → **main - only Hazernit may update**.
-
-- Enforcement = `Active`.
-- Target branches = `main`.
-- `Restrict updates` = включено.
-- `Bypass` = только пользователь `@Hazernit`, `Always allow`.
-- `Restrict deletions` и `Block force pushes` = включено.
-- `Require a pull request before merging` + 1 approval + `Require review from Code Owners` = включено.
-
-Это означает, что участники могут писать в `feature/*` и присылать PR, **но никто кроме владельца не может ни напрямую пушить в `main`, ни завершить слияние PR**. Владелец сможет обновлять `main` напрямую или через Merge pull request по своему выбору (у него есть исключение из правил).
-
-Защита применяется на стороне GitHub, а не на компьютерах участников. Если выдашь кому-то **Admin**, человек сможет изменять сами правила, поэтому приглашай с **Write**.
-
-## Работа участников
-
-См. [CONTRIBUTING.md](CONTRIBUTING.md). Git-последовательность:
-
-```bash
-git clone https://github.com/Hazernit/operator-complex-python.git
-cd operator-complex-python
-git switch -c feature/my-part
-git add .
-git commit -m "feat: implement my part"
-git push -u origin feature/my-part
-```
-
-Потом на GitHub: создать Pull Request в `main`. Владелец проверяет и сам нажимает Merge.
-
-## Проверить ограничения вручную
-
-```bash
+gh auth status
 gh api repos/Hazernit/operator-complex-python/rules/branches/main --jq '.[].type'
 ```
 
-Ожидается наличие `update`, `deletion`, `non_fast_forward`, `pull_request`.
+Ожидаются типы `update`, `deletion`, `non_fast_forward`, `pull_request`. Но итоговую настройку и исключение для владельца проверять также в [Rulesets](https://github.com/Hazernit/operator-complex-python/settings/rules). Не выдавать другим `Admin` и не отключать правила ради удобства.
 
-Тесты GitHub Actions автоматически запускаются на PR. **Они пока не являются обязательной блокирующей проверкой**: её можно включить в ruleset после первого успешного запуска, чтобы не заблокировать слияния ошибкой в свежем CI.
+### Приглашение нового участника
+
+В папке репозитория, где существует скрипт:
+
+```bash
+./scripts/invite_collaborators.sh github_username
+```
+
+Скрипт проверяет главные ограничения `main` и отправляет приглашение с правом `Write`. Пользователь должен его **принять**. Проверить статус: [Settings → Collaborators](https://github.com/Hazernit/operator-complex-python/settings/access). Участников без подтверждения GitHub-логина не назначать на Issues.
+
+## Четыре направления подкоманды
+
+| Направление | Ветка направления | GitHub Issues |
+| --- | --- | --- |
+| Backend и единый контракт | `feature/backend` | [#1–3](https://github.com/Hazernit/operator-complex-python/issues) |
+| Адаптеры / mock / Gazebo | `feature/adapters` | [#4–5](https://github.com/Hazernit/operator-complex-python/issues) |
+| Карта / dashboard / live-данные | `feature/dashboard` | [#6–7](https://github.com/Hazernit/operator-complex-python/issues) |
+| Миссии / сквозные сценарии | `feature/missions` | [#8–9](https://github.com/Hazernit/operator-complex-python/issues) |
+
+Направления закреплены в плане подкоманды; для отдельного изменения рекомендуется создавать короткоживущую ветку `feature/<номер-issue>-<задача>` от актуального `main`. Ветка Git не ограничивает доступ конкретному человеку: соблюдение ответственности обеспечивается договорённостью, Issues, PR и review.
+
+Порядок работы: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Снимки версий (не релизы)
+
+- `version/v0.3` + `snapshot/v0.3` — предыдущая версия.
+- `version/v0.4-new-interface` + `snapshot/v0.4-new-interface` — новый UI до переноса запускателей.
+- `main` — UI 0.4 + запускатели из 0.3.
+
+Старые ветки нужны для сравнения, **не сливать их целиком обратно в `main`**. Git-тег сам по себе не является GitHub Release. История описана в [README](README.md#версии-и-история).
+
+## CI и ревью
+
+GitHub Actions запускается при PR в `main` и после пуша в неё: [Python tests](https://github.com/Hazernit/operator-complex-python/actions/workflows/tests.yml). Проверять лог целиком: зеленая отметка **не доказательство**, если часть GUI-тестов пропущена. Актуальная политика и незакрытые проверки описаны в [плане улучшений](docs/IMPROVEMENT_BACKLOG.md).
+
+Прохождение Actions само по себе не даёт другим участникам права сливать в `main`. Обязательные status checks в Ruleset — отдельная настройка, которую нужно согласованно включить после стабилизации CI.
+
+## Для справки: первоначальная публикация другого репозитория
+
+Только если **создаётся новый репозиторий**, можно использовать `scripts/publish_github.sh`, предварительно установив `gh`, выполнив `gh auth login` и настроив Git-авторство. Для нашего существующего `Hazernit/operator-complex-python` этот шаг **не повторять**. При прерванном SSH/push нельзя считать всё опубликованным до проверки remote и Ruleset. GitHub Free поддерживает защиту веток публичных репозиториев; приватные возможности зависят от плана GitHub.

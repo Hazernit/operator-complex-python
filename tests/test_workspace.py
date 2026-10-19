@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import tempfile
-import time
 import unittest
 from unittest.mock import patch
 
@@ -23,6 +22,10 @@ else:
     QT_AVAILABLE = True
     from operator_stub.models import Point
     from operator_stub.ui import OperatorWindow
+    if __package__:
+        from .qt_wait import wait_until
+    else:
+        from qt_wait import wait_until
 
 
 @unittest.skipUnless(QT_AVAILABLE, 'Для проверок GUI нужен PySide6-Essentials')
@@ -53,12 +56,11 @@ class WorkspaceTests(unittest.TestCase):
                 if not window.platform_list.item(row).isHidden()]
 
     def wait_for_import(self):
-        deadline = time.monotonic() + 10
-        while self.window.recording_loader.is_loading and time.monotonic() < deadline:
-            self.app.processEvents()
-            QTest.qWait(1)
-        self.app.processEvents()
-        self.assertFalse(self.window.recording_loader.is_loading, 'Импорт не завершился вовремя')
+        loader = self.window.recording_loader
+        self.assertTrue(
+            wait_until(lambda: not loader.is_loading, timeout=10),
+            f'Импорт не завершился вовремя: pending={loader.pending_request_ids}',
+        )
 
     def test_search_preserves_selected_context_and_each_route(self):
         window = self.window
