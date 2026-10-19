@@ -21,7 +21,7 @@
 
 В первый выпуск входят **четыре уже подготовленные сборки**, по две на каждую линию. Для публикации используется отдельный локальный комплект `OperatorComplex-dual-beta.1-release-kit.zip` и `publish-both-betas.sh`. Он проверяет контрольные суммы, репозиторий, коммиты и отсутствие тегов, затем создаёт **два независимых** prerelease. Через Git пласты бинарников не проходят.
 
-Пока скрипт на Mac не выполнен, ссылки `v0.3.0-beta.1` и `v0.4.0-beta.1` выше могут вести на несуществующие страницы. Фактическое наличие ассетов проверяйте по [списку Releases](https://github.com/Hazernit/operator-complex-python/releases).
+**Оба первоначальных выпуска опубликованы 19 октября 2026 года:** [Technical 0.3 Beta 1](https://github.com/Hazernit/operator-complex-python/releases/tag/v0.3.0-beta.1) и [New Interface 0.4 Beta 1](https://github.com/Hazernit/operator-complex-python/releases/tag/v0.4.0-beta.1). У каждого — два ZIP (Windows/macOS) и `SHA256SUMS.txt`; их загрузка через первоначальный скрипт **уже выполнена**. Повторно запускать `publish-both-betas.sh` для этих тегов не нужно.
 
 **Оговорка по качеству:** первоначальный Windows-архив создавался вне Windows и **не тестировался на реальном Windows x64**, а macOS `.app` ad-hoc signed. Это бета, не стабильный выпуск. Не переименовывайте этот факт в «проверено» без теста самих ZIP на двух системах.
 
