@@ -34,3 +34,7 @@ id_ed25519
 *.db
 .tox/
 .nox/
+
+# Local launcher runtime artifacts
+.runtime/
+.venv-backup-*/
