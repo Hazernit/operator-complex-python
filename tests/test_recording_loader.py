@@ -143,7 +143,9 @@ class RecordingLoaderTests(unittest.TestCase):
         try:
             with patch.object(recording_loader, 'load_recording', observed_real_parse):
                 self.loader.start(large, 'large-source')
-                self.wait_for_completion()
+                # CI Linux runners can parse 80,000 rows more slowly than local machines.
+                # Keep the entire workload and event-loop assertions; allow a realistic wall-clock budget.
+                self.wait_for_completion(timeout=45)
         finally:
             heartbeat.stop()
         self.assertFalse(self.failures)
