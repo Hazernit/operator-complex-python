@@ -8,7 +8,10 @@ version = "0.4.0"
 description = "Программная заглушка единого операторского комплекса БПЛА, НРТК и БЭК"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["PySide6-Essentials>=6.8,<7"]
+dependencies = [
+    "PySide6-Essentials>=6.8,!=6.12.0,<7; python_version < '3.12'",
+    "PySide6-Essentials>=6.8,<7; python_version >= '3.12'",
+]
 
 [project.scripts]
 operator-stub = "operator_stub.__main__:main"

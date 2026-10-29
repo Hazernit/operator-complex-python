@@ -1,1 +1,4 @@
-PySide6-Essentials>=6.8,<7
+# CPython 3.11 + 6.12.0 aborts when QTableWidget.item() returns None repeatedly.
+# Reproduction: https://github.com/Hazernit/operator-complex-python/actions/runs/40823655448
+PySide6-Essentials>=6.8,!=6.12.0,<7; python_version < "3.12"
+PySide6-Essentials>=6.8,<7; python_version >= "3.12"

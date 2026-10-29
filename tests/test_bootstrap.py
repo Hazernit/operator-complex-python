@@ -5,6 +5,7 @@ import io
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -30,6 +31,40 @@ class BootstrapTests(unittest.TestCase):
         marker = environment / "keep-user-files.txt"
         marker.write_text("existing environment", encoding="utf-8")
         return marker
+
+    def test_qt_compatibility_rejects_only_confirmed_broken_combination(self):
+        cases = [
+            ((3, 11), "6.11.3", True),
+            ((3, 11), "6.12.0", False),
+            ((3, 12), "6.12.0", True),
+            ((3, 13), "6.12.0", True),
+            ((3, 11), "6.12.0.1", True),
+            ((3, 11), "6.12.1", True),
+            ((3, 11), "6.8.0", True),
+            ((3, 11), "6.7.3", False),
+            ((3, 12), "7.0.0", False),
+        ]
+        for python_version, qt_version, expected in cases:
+            with self.subTest(python=python_version, qt=qt_version):
+                self.assertEqual(bootstrap.supported_qt_version(python_version, qt_version), expected)
+
+    def test_dependency_probe_uses_child_interpreter_compatibility(self):
+        # Emulate Qt's version and the target interpreter inside the actual probe
+        # process, without installing a wheel or constructing QApplication.
+        fake_qt = self.root / "PySide6.py"
+        for python_version, qt_version, expected in [
+            ((3, 11), "6.12.0", False),
+            ((3, 12), "6.12.0", True),
+            ((3, 11), "6.11.3", True),
+        ]:
+            with self.subTest(python=python_version, qt=qt_version):
+                fake_qt.write_text(
+                    f"import sys\nsys.version_info = {python_version!r}\n"
+                    f"__version__ = {qt_version!r}\nQtCore = QtGui = QtWidgets = None\n",
+                    encoding="utf-8",
+                )
+                with patch.dict(os.environ, {"PYTHONPATH": str(self.root), "PYTHONDONTWRITEBYTECODE": "1"}):
+                    self.assertEqual(bootstrap.dependencies_ready(sys.executable), expected)
 
     def test_invalid_explicit_python_does_not_silently_fall_back(self):
         with patch.dict(os.environ, {"OPERATOR_PYTHON": "/missing/python3.12"}), \

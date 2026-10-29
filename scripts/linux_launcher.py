@@ -85,6 +85,9 @@ def qt_error_message(executable, details):
         message += 'Отсутствуют системные библиотеки: ' + ', '.join(missing) + '. '
         packages = {
             'libxcb-cursor.so.0': 'libxcb-cursor0',
+            'libxcb-icccm.so.4': 'libxcb-icccm4',
+            'libxcb-keysyms.so.1': 'libxcb-keysyms1',
+            'libxcb-shape.so.0': 'libxcb-shape0',
             'libxkbcommon.so.0': 'libxkbcommon0',
             'libxkbcommon-x11.so.0': 'libxkbcommon-x11-0',
             'libEGL.so.1': 'libegl1',

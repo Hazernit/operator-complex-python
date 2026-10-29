@@ -47,11 +47,22 @@ def find_python():
     raise RuntimeError('Не найден Python 3.11+. Установите Python 3.11 или новее и повторите запуск. Можно указать путь через OPERATOR_PYTHON.')
 
 
+def supported_qt_version(python_version, qt_version):
+    version = tuple(map(int, qt_version.split('.')))
+    # This exact release aborts on CPython 3.11 when Qt returns None repeatedly:
+    # https://github.com/Hazernit/operator-complex-python/actions/runs/40823655448
+    return (6, 8) <= version < (7, 0) and not (
+        tuple(python_version[:2]) < (3, 12) and version == (6, 12, 0)
+    )
+
+
 def dependencies_ready(executable):
     code = (
+        'import sys; '
+        f'sys.path.insert(0, {str(Path(__file__).resolve().parent)!r}); '
+        'from bootstrap import supported_qt_version; '
         'import PySide6; from PySide6 import QtCore, QtGui, QtWidgets; '
-        'v=tuple(map(int,PySide6.__version__.split(".")[:2])); '
-        'assert (6,8) <= v < (7,0)'
+        'assert supported_qt_version(sys.version_info, PySide6.__version__)'
     )
     try:
         return subprocess.run(
