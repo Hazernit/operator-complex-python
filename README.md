@@ -80,7 +80,7 @@ HTTPS подходит для публичного чтения без наст�
 | --- | --- | --- | --- |
 | **Windows 10/11, 64-bit** | [`run-windows.bat`](run-windows.bat) — специализированный; [`run-python-project.bat`](run-python-project.bat) — универсальный | Дважды щёлкните BAT в корне исходников или выполните команду ниже | Может найти или скачать подходящий Python, создать `.venv` и установить зависимости |
 | **macOS** | [`run.command`](run.command) | Двойной щелчок или `sh run.command` | Требуется установленный `python3`; `bootstrap.py` подбирает Python ≥3.11, создаёт `.venv` и ставит зависимости |
-| **Linux** | Отдельный `run-linux.sh` **в разработке** ([Issue #20](https://github.com/Hazernit/operator-complex-python/issues/20)) | Пока используйте **`python3 bootstrap.py`** из корня проекта | Требуется установленный Python ≥3.11 и необходимые системные библиотеки Qt |
+| **Linux** | [`run-linux.sh`](run-linux.sh) | `sh run-linux.sh` из корня исходников или `sh /путь/к/проекту/run-linux.sh` из любого каталога | Требуется установленный Python ≥3.11; `bootstrap.py` создаёт и повторно использует `.venv`, устанавливает зависимости; системные библиотеки Qt устанавливаются отдельно |
 
 **Windows — специализированный запускатель** (CMD или PowerShell, в корне проекта):
 
@@ -110,13 +110,24 @@ python3 bootstrap.py
 
 При необходимости путь к Python задаётся переменной `OPERATOR_PYTHON`, например `OPERATOR_PYTHON=python3.12 sh run.command`. **`run.command` проверяет наличие команды `python3`,** поэтому на macOS она должна быть доступна в PATH.
 
-**Linux — существующий способ до появления отдельного запускателя:**
+**Linux — запускатель из исходников:**
 
 ```bash
-python3 bootstrap.py
+sh run-linux.sh
 ```
 
-Этот сценарий использует уже существующий кроссплатформенный `bootstrap.py`: он подготавливает локальное окружение и запускает `main.py`, но **не устанавливает сам Python или системные библиотеки Qt**. Отдельный проверенный Linux-скрипт находится в [задаче #20](https://github.com/Hazernit/operator-complex-python/issues/20).
+Запускатель работает и из другого каталога: укажите полный путь к `run-linux.sh`. Он вызывает существующий `bootstrap.py`, который создаёт `.venv` **в папке проекта** и повторно использует готовое окружение. При необходимости выберите Python явно: `OPERATOR_PYTHON=python3.11 sh run-linux.sh`. Прямой запуск `python3 bootstrap.py` также доступен.
+
+Для обычного GUI нужен работающий сеанс **Wayland или X11**. Запускатель выбирает его по переменным окружения, а явно заданный `QT_QPA_PLATFORM` сохраняет; например, `QT_QPA_PLATFORM=xcb sh run-linux.sh` выбирает X11/XWayland. Если графического сеанса нет, запускатель сообщает об этом. Проверить интерфейс без видимого окна или только подготовить окружение можно так:
+
+```bash
+QT_QPA_PLATFORM=offscreen sh run-linux.sh --smoke-test
+sh run-linux.sh --setup-only
+```
+
+**Сам Python и системные библиотеки Qt не устанавливаются автоматически.** При ошибках запускатель выводит диагностику `venv`/`ensurepip`, `pip` или фактически отсутствующих библиотек Qt; для известных библиотек приводит названия пакетов Debian/Ubuntu. Установите необходимые пакеты средствами своего дистрибутива. Например, для создания окружения в Debian/Ubuntu может потребоваться `python3-venv` либо пакет `venv` для выбранной версии Python.
+
+Проверено в [Linux source launcher CI](https://github.com/Hazernit/operator-complex-python/actions/workflows/linux-launcher.yml) на **Ubuntu 22.04 / Python 3.11** и **Ubuntu 24.04 / Python 3.12**: чистая установка, повторный запуск без доступа к индексу пакетов, пути с пробелами, произвольный рабочий каталог и реальные smoke-тесты `offscreen`, X11/Xvfb и Wayland/Weston. Это **запуск из исходников**, готовые Linux AppImage/DEB не выпускаются в рамках этой задачи ([Issue #20](https://github.com/Hazernit/operator-complex-python/issues/20)).
 
 При первом запуске из исходников обычно нужен интернет для установки Python-зависимостей. Окружение `.venv` создаётся **на каждом компьютере отдельно** и не хранится в Git. Запускатели из исходников отличаются от `Start-*.bat` внутри готовых Windows ZIP: последние запускают уже упакованный EXE без установки Python.
 
@@ -272,6 +283,8 @@ python main.py --smoke-test
 Проверка скриншотов на системе с работающим Qt: `python scripts/capture_workspace.py` (создаёт локальные файлы `output/screenshots/`, которые не коммитятся автоматически).
 
 Проверка исходников: [Python tests](https://github.com/Hazernit/operator-complex-python/actions/workflows/tests.yml) на **Windows, macOS и Ubuntu**. Текущий строгий CI требует успешных GUI-тестов **без пропусков**; ранее встречавшиеся 76 скрытых `skipped` устранены. Проверка **готовых бинарников** выполняется отдельно в [Desktop beta packages](https://github.com/Hazernit/operator-complex-python/actions/workflows/desktop-betas.yml). Детали расследования и история результатов: [docs/recording-loader-ci-investigation.md](docs/recording-loader-ci-investigation.md) и [docs/ui-validation.md](docs/ui-validation.md).
+
+Linux-запускатель дополнительно проверяется в [Linux source launcher](https://github.com/Hazernit/operator-complex-python/actions/workflows/linux-launcher.yml): ShellCheck, shell-тесты, создание и повторное использование `.venv`, полный набор тестов без пропусков и три графических режима. Локальная проверка оболочки: `sh -n run-linux.sh` и `python3 scripts/test_linux_shell.py`; проверка реального приложения без дисплея: `QT_QPA_PLATFORM=offscreen sh run-linux.sh --smoke-test`.
 
 ## Документы и работа над проектом
 

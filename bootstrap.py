@@ -1,4 +1,4 @@
-"""Prepare a local environment, then run the app. This helper supports Python 3.9+."""
+"""Prepare a local Python 3.11+ environment, then run the app."""
 
 import os
 from pathlib import Path
@@ -47,11 +47,22 @@ def find_python():
     raise RuntimeError('Не найден Python 3.11+. Установите Python 3.11 или новее и повторите запуск. Можно указать путь через OPERATOR_PYTHON.')
 
 
+def supported_qt_version(python_version, qt_version):
+    version = tuple(map(int, qt_version.split('.')))
+    # This exact release aborts on CPython 3.11 when Qt returns None repeatedly:
+    # https://github.com/Hazernit/operator-complex-python/actions/runs/40823655448
+    return (6, 8) <= version < (7, 0) and not (
+        tuple(python_version[:2]) < (3, 12) and version == (6, 12, 0)
+    )
+
+
 def dependencies_ready(executable):
     code = (
+        'import sys; '
+        f'sys.path.insert(0, {str(Path(__file__).resolve().parent)!r}); '
+        'from bootstrap import supported_qt_version; '
         'import PySide6; from PySide6 import QtCore, QtGui, QtWidgets; '
-        'v=tuple(map(int,PySide6.__version__.split(".")[:2])); '
-        'assert (6,8) <= v < (7,0)'
+        'assert supported_qt_version(sys.version_info, PySide6.__version__)'
     )
     try:
         return subprocess.run(
@@ -71,7 +82,14 @@ def prepare_environment():
     else:
         python = find_python()
         print(f'Создаю окружение проекта с Python: {python}', flush=True)
-        subprocess.run([python, '-m', 'venv', str(environment)], check=True, cwd=ROOT)
+        try:
+            subprocess.run([python, '-m', 'venv', str(environment)], check=True, cwd=ROOT)
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError(
+                'Не удалось создать .venv. Проверьте модули venv и ensurepip выбранного Python. '
+                'В Debian/Ubuntu может потребоваться пакет python3-venv (или python3.11-venv '
+                'для соответствующей версии). Установите его через пакетный менеджер и повторите запуск.'
+            ) from error
     if not dependencies_ready(executable):
         print('Устанавливаю зависимости проекта. Для первого запуска нужен интернет.', flush=True)
         try:
@@ -80,13 +98,30 @@ def prepare_environment():
                 check=True, cwd=ROOT,
             )
         except subprocess.CalledProcessError as error:
-            raise RuntimeError('Не удалось установить зависимости. Проверьте подключение к интернету и повторите запуск.') from error
+            raise RuntimeError(
+                'Не удалось установить зависимости. Проверьте подключение к интернету '
+                f'и доступность pip командой: "{executable}" -m pip --version. '
+                'Если pip отсутствует, восстановите его командой -m ensurepip --upgrade '
+                'для Python этого окружения и повторите запуск.'
+            ) from error
         if not dependencies_ready(executable):
-            raise RuntimeError('Зависимости установлены, но Qt не загрузился. Проверьте ошибки установки выше.')
+            try:
+                details = subprocess.run(
+                    [str(executable), '-c', 'from PySide6 import QtCore, QtGui, QtWidgets'],
+                    capture_output=True, text=True, timeout=30,
+                )
+                diagnostic = details.stderr.strip() or details.stdout.strip() or 'Не поддерживается версия PySide6.'
+            except (OSError, subprocess.TimeoutExpired) as error:
+                diagnostic = f'Не удалось проверить импорт Qt: {error}'
+            raise RuntimeError(
+                'Зависимости установлены, но Qt не загрузился. '
+                'Проверьте системные библиотеки Qt и сообщения ниже:\n'
+                + diagnostic
+            )
     return executable
 
 
-def main(argv=None):
+def main(argv=None, before_launch=None):
     args = list(sys.argv[1:] if argv is None else argv)
     setup_only = '--setup-only' in args
     if setup_only:
@@ -96,6 +131,8 @@ def main(argv=None):
         if setup_only:
             print(f'Окружение готово: {executable}', flush=True)
             return 0
+        if before_launch is not None:
+            before_launch(executable)
         return subprocess.call([str(executable), str(ROOT / 'main.py'), *args], cwd=ROOT)
     except (RuntimeError, OSError, subprocess.CalledProcessError) as error:
         print(f'Ошибка запуска: {error}', file=sys.stderr)

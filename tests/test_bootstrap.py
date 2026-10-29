@@ -5,6 +5,7 @@ import io
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -30,6 +31,40 @@ class BootstrapTests(unittest.TestCase):
         marker = environment / "keep-user-files.txt"
         marker.write_text("existing environment", encoding="utf-8")
         return marker
+
+    def test_qt_compatibility_rejects_only_confirmed_broken_combination(self):
+        cases = [
+            ((3, 11), "6.11.3", True),
+            ((3, 11), "6.12.0", False),
+            ((3, 12), "6.12.0", True),
+            ((3, 13), "6.12.0", True),
+            ((3, 11), "6.12.0.1", True),
+            ((3, 11), "6.12.1", True),
+            ((3, 11), "6.8.0", True),
+            ((3, 11), "6.7.3", False),
+            ((3, 12), "7.0.0", False),
+        ]
+        for python_version, qt_version, expected in cases:
+            with self.subTest(python=python_version, qt=qt_version):
+                self.assertEqual(bootstrap.supported_qt_version(python_version, qt_version), expected)
+
+    def test_dependency_probe_uses_child_interpreter_compatibility(self):
+        # Emulate Qt's version and the target interpreter inside the actual probe
+        # process, without installing a wheel or constructing QApplication.
+        fake_qt = self.root / "PySide6.py"
+        for python_version, qt_version, expected in [
+            ((3, 11), "6.12.0", False),
+            ((3, 12), "6.12.0", True),
+            ((3, 11), "6.11.3", True),
+        ]:
+            with self.subTest(python=python_version, qt=qt_version):
+                fake_qt.write_text(
+                    f"import sys\nsys.version_info = {python_version!r}\n"
+                    f"__version__ = {qt_version!r}\nQtCore = QtGui = QtWidgets = None\n",
+                    encoding="utf-8",
+                )
+                with patch.dict(os.environ, {"PYTHONPATH": str(self.root), "PYTHONDONTWRITEBYTECODE": "1"}):
+                    self.assertEqual(bootstrap.dependencies_ready(sys.executable), expected)
 
     def test_invalid_explicit_python_does_not_silently_fall_back(self):
         with patch.dict(os.environ, {"OPERATOR_PYTHON": "/missing/python3.12"}), \
@@ -102,6 +137,54 @@ class BootstrapTests(unittest.TestCase):
         run.assert_called_once_with(
             [selected, "-m", "venv", str(self.root / ".venv")], check=True, cwd=self.root,
         )
+
+    def test_missing_venv_or_ensurepip_has_package_guidance(self):
+        with patch.object(bootstrap, "find_python", return_value="python3.11"), \
+             patch.object(bootstrap.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "venv")), \
+             redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "venv.*ensurepip") as error:
+                bootstrap.prepare_environment()
+        self.assertIn("python3-venv", str(error.exception))
+
+    def test_missing_pip_has_environment_specific_recovery(self):
+        self.existing_environment()
+        with patch.object(bootstrap, "supported_python", return_value=True), \
+             patch.object(bootstrap, "dependencies_ready", return_value=False), \
+             patch.object(bootstrap.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "pip")), \
+             redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "pip.*ensurepip") as error:
+                bootstrap.prepare_environment()
+        self.assertIn(str(self.executable), str(error.exception))
+
+    def test_prelaunch_check_receives_prepared_interpreter_before_start(self):
+        calls = []
+        with patch.object(bootstrap, "prepare_environment", return_value=self.executable), \
+             patch.object(bootstrap.subprocess, "call", side_effect=lambda *a, **kw: calls.append("launch") or 7):
+            def check(executable):
+                self.assertEqual(executable, self.executable)
+                calls.append("check")
+            self.assertEqual(bootstrap.main(["--smoke-test"], before_launch=check), 7)
+        self.assertEqual(calls, ["check", "launch"])
+
+    def test_prelaunch_failure_does_not_start_application(self):
+        error_output = io.StringIO()
+        with patch.object(bootstrap, "prepare_environment", return_value=self.executable), \
+             patch.object(bootstrap.subprocess, "call") as launch, \
+             redirect_stderr(error_output):
+            def check(executable):
+                raise RuntimeError("missing native Qt runtime")
+            self.assertEqual(bootstrap.main(["--smoke-test"], before_launch=check), 1)
+        launch.assert_not_called()
+        self.assertIn("missing native Qt runtime", error_output.getvalue())
+
+    def test_setup_only_does_not_require_a_graphical_session(self):
+        with patch.object(bootstrap, "prepare_environment", return_value=self.executable), \
+             patch.object(bootstrap.subprocess, "call") as launch, \
+             redirect_stdout(io.StringIO()):
+            def check(executable):
+                self.fail("setup-only must not construct QApplication")
+            self.assertEqual(bootstrap.main(["--setup-only"], before_launch=check), 0)
+        launch.assert_not_called()
 
     def test_setup_only_does_not_launch_the_application(self):
         with patch.object(bootstrap, "prepare_environment", return_value=self.executable), \
