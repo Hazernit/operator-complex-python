@@ -1,6 +1,6 @@
 """Linux preflight contracts, deterministic on every CI operating system."""
 
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
 import os
@@ -14,6 +14,11 @@ from scripts import linux_launcher
 
 
 class DisplaySelectionTests(unittest.TestCase):
+    def setUp(self):
+        output = redirect_stdout(io.StringIO())
+        output.__enter__()
+        self.addCleanup(output.__exit__, None, None, None)
+
     def test_headless_smoke_selects_offscreen(self):
         environment = {}
         linux_launcher.configure_display(["--smoke-test"], environment)
@@ -83,6 +88,9 @@ class DisplaySelectionTests(unittest.TestCase):
 
 class LinuxPreflightTests(unittest.TestCase):
     def setUp(self):
+        output = redirect_stdout(io.StringIO())
+        output.__enter__()
+        self.addCleanup(output.__exit__, None, None, None)
         self.directory = tempfile.TemporaryDirectory(prefix="operator preflight tests ")
         self.addCleanup(self.directory.cleanup)
         root_patch = patch.object(linux_launcher, "ROOT", Path(self.directory.name))
@@ -159,16 +167,17 @@ class LinuxPreflightTests(unittest.TestCase):
         libraries.assert_not_called()
 
     def test_qt_abort_reports_actual_native_library_and_original_diagnostic(self):
+        executable = Path("/source with spaces/.venv/bin/python")
         result = subprocess.CompletedProcess([], -6, stdout="", stderr="Could not load the Qt platform plugin xcb")
         with patch.object(linux_launcher.subprocess, "run", return_value=result) as run, \
              patch.object(linux_launcher, "missing_qt_libraries", return_value=["libEGL.so.1", "libxcb-cursor.so.0"]):
             with self.assertRaisesRegex(RuntimeError, "libEGL.so.1") as error:
-                linux_launcher.check_qt(Path("/source with spaces/.venv/bin/python"))
+                linux_launcher.check_qt(executable)
         message = str(error.exception)
         self.assertIn("libxcb-cursor0", message)
         self.assertIn("libegl1", message)
         self.assertIn("Could not load the Qt platform plugin xcb", message)
-        self.assertEqual(run.call_args.args[0][0], "/source with spaces/.venv/bin/python")
+        self.assertEqual(run.call_args.args[0][0], str(executable))
         self.assertEqual(run.call_args.kwargs["timeout"], 30)
         self.assertNotIn("shell", run.call_args.kwargs)
 
