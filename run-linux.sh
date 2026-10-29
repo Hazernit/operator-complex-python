@@ -1,6 +1,6 @@
 #!/bin/sh
 # Environment preparation stays in bootstrap.py; this wrapper only finds an entry Python.
-TASK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 1
+TASK_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 1
 cd "$TASK_DIR" || exit 1
 if [ -n "${OPERATOR_PYTHON:-}" ]; then
     TASK_PYTHON=$OPERATOR_PYTHON
