@@ -103,6 +103,54 @@ class BootstrapTests(unittest.TestCase):
             [selected, "-m", "venv", str(self.root / ".venv")], check=True, cwd=self.root,
         )
 
+    def test_missing_venv_or_ensurepip_has_package_guidance(self):
+        with patch.object(bootstrap, "find_python", return_value="python3.11"), \
+             patch.object(bootstrap.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "venv")), \
+             redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "venv.*ensurepip") as error:
+                bootstrap.prepare_environment()
+        self.assertIn("python3-venv", str(error.exception))
+
+    def test_missing_pip_has_environment_specific_recovery(self):
+        self.existing_environment()
+        with patch.object(bootstrap, "supported_python", return_value=True), \
+             patch.object(bootstrap, "dependencies_ready", return_value=False), \
+             patch.object(bootstrap.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "pip")), \
+             redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "pip.*ensurepip") as error:
+                bootstrap.prepare_environment()
+        self.assertIn(str(self.executable), str(error.exception))
+
+    def test_prelaunch_check_receives_prepared_interpreter_before_start(self):
+        calls = []
+        with patch.object(bootstrap, "prepare_environment", return_value=self.executable), \
+             patch.object(bootstrap.subprocess, "call", side_effect=lambda *a, **kw: calls.append("launch") or 7):
+            def check(executable):
+                self.assertEqual(executable, self.executable)
+                calls.append("check")
+            self.assertEqual(bootstrap.main(["--smoke-test"], before_launch=check), 7)
+        self.assertEqual(calls, ["check", "launch"])
+
+    def test_prelaunch_failure_does_not_start_application(self):
+        error_output = io.StringIO()
+        with patch.object(bootstrap, "prepare_environment", return_value=self.executable), \
+             patch.object(bootstrap.subprocess, "call") as launch, \
+             redirect_stderr(error_output):
+            def check(executable):
+                raise RuntimeError("missing native Qt runtime")
+            self.assertEqual(bootstrap.main(["--smoke-test"], before_launch=check), 1)
+        launch.assert_not_called()
+        self.assertIn("missing native Qt runtime", error_output.getvalue())
+
+    def test_setup_only_does_not_require_a_graphical_session(self):
+        with patch.object(bootstrap, "prepare_environment", return_value=self.executable), \
+             patch.object(bootstrap.subprocess, "call") as launch, \
+             redirect_stdout(io.StringIO()):
+            def check(executable):
+                self.fail("setup-only must not construct QApplication")
+            self.assertEqual(bootstrap.main(["--setup-only"], before_launch=check), 0)
+        launch.assert_not_called()
+
     def test_setup_only_does_not_launch_the_application(self):
         with patch.object(bootstrap, "prepare_environment", return_value=self.executable), \
              patch.object(bootstrap.subprocess, "call") as launch, \
